@@ -3227,13 +3227,19 @@ end)
 -- KILL
 -- ============================================================
 _G.Nexus.register("kill", {}, "kill <player>", "<player>", "Set a player's health to 0", function(target)
-    if not target then notify("KKill", "Provide a target.") returnick end
-    local plr = findPlayer(target",)
-    if not plr or not pl "r.Character then notify("Kill", "PlayerPlayer not found.") return end
+    if not target then
+        notify("Kill", "Provide a target.")
+        return
+    end
+    local plr = findPlayer(target)
+    if not plr or not plr.Character then
+        notify("Kill", "Player not found.")
+        return
+    end
     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
     if hum then hum.Health = 0 end
     notify("Kill", "Killed " .. plr.Name)
-end)
+end))
 
 -- ============================================================
 -- LOOP BRING
@@ -3264,75 +3270,6 @@ end)
 _G.Nexus.register("unloopbring", {"unlbring"}, "unloopbring", "", "Stop all loop brings", function()
     for plr in pairs(loopBringThreads) do loopBringThreads[plr] = nil end
     notify("LoopBring", "Stopped.")
-end)
-
--- ============================================================
--- VEHICLE FLING KICK (the one from the beginning)
--- ============================================================
-local FLING_SPEED = 5000
-local TP_OFFSET = 3
-
-local function findNearestCar(maxDist)
-    local hrp = getHRP()
-    if not hrp then return nil end
-    local myPos = hrp.Position
-    local closest, closestDist = nil, maxDist or 30
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("VehicleSeat") then
-            local car = obj:FindFirstAncestorOfClass("Model")
-            if car and car.PrimaryPart then
-                local dist = (car.PrimaryPart.Position - myPos).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closest = car
-                end
-            end
-        end
-    end
-    return closest
-end
-
-_G.Nexus.register("flingkick", {"vflingkick", "fk"}, "flingkick <player>", "<player>", "Vehicle fling kick (gets target kicked by anti-cheat)", function(target)
-    if not target then notify("FlingKick", "Provide a target.") return end
-    local plr = findPlayer(target)
-    if not plr or not plr.Character then notify("Fling not found.") return end
-    local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
-    if not tHRP then return end
-
-    local car = findNearestCar(40)
-    if not car then notify("FlingKick", "No vehicle within 40 studs.") return end
-
-    -- Sit in the car
-    local seat
-    for _, d in ipairs(car:GetDescendants()) do
-        if d:IsA("VehicleSeat") then seat = d break end
-    end
-    if not seat then notify("FlingKick", "No seat found.") return end
-
-    local hrp = getHRP()
-    hrp.CFrame = seat.CFrame
-    task.wait(0.1)
-    seat:Sit(LocalPlayer.Character:FindFirstChildOfClass("Humanoid"))
-    task.wait(0.2)
-
-    -- Unseat and fling the car at the target
-    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.Sit = false end
-    task.wait(0.1)
-
-    if car.PrimaryPart then
-        car:PivotTo(CFrame.new((tHRP.CFrame + tHRP.CFrame.LookVector * -TP_OFFSET).Position, tHRP.Position))
-    end
-    task.wait(0.05)
-
-    for _, part in ipairs(car:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.AssemblyLinearVelocity = (tHRP.Position - part.Position).Unit * FLING_SPEED
-            part.AssemblyAngularVelocity = Vector3.new(FLING_SPEED, FLING_SPEED, FLING_SPEED)
-        end
-    end
-
-    notify("FlingKick", "Launched vehicle at " .. plr.Name)
 end)
 
 print("[Nexus] Layer 2 Part 4 loaded. Fling / damage commands ready.")
