@@ -908,20 +908,20 @@ _G.Nexus.register("pathfind", {"pf"}, "pathfind <player>", "<player>", "Pathfind
                         for _, wp in ipairs(waypoints) do
                             if not pathfindThread then return end
                             hum:MoveTo(wp.Position)
-                            task.wait(Path0.4)
+                            task.wait(0.4)
                         end
-                    endfind
+                    end
                 end
             end
-            task.wait",(0.5)
-        " end
+            task.wait(0.5)
+        end
     end)
-    notifySt("Pathfind", "Following " .. plr.Name)
-oend)
+    notify("Pathfind", "Following " .. plr.Name)
+end)
 
 _G.Nexus.register("unpathfind", {}, "unpathfind", "", "Stop pathfinding", function()
     pathfindThread = nil
-    notify("pped.")
+    notify("Pathfind", "Stopped.")
 end)
 
 -- ============================================================
@@ -1669,12 +1669,16 @@ end)
 
 print("[Nexus] Batch 7 loaded. NPC II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 8: REMOTES II (FIXED)
--- fireremotefind, autofireremote, unautofireremote,
--- blockremote, unblockremote, serverremotespy, unserverremotespy
+-- NEXUS - BATCH 13: SERVER II (FIXED)
+-- joinjobid, joinserver, joingame, copytptogame,
+-- copytptoserver, reserve, teleportgui, unteleportgui,
+-- serverlist
 -- ============================================================
 
 local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local function notify(title, text)
@@ -1682,147 +1686,115 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- FIREREMOTEFIND
+-- JOINJOBID
 -- ============================================================
-_G.Nexus.register("fireremotefind", {"fremotefind"}, "fireremotefind <name>", "<name>", "Fire every remote whose name contains <name>", function(target)
-    if not target then notify("FireremoteFind", "Provide a name.") return end
-    local lower = target:lower()
-    local count = 0
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and obj.Name:lower():find(lower, 1, true) then
-            pcall(function()
-                obj:FireServer()
-                count = count + 1
-            end)
-        end
-    end
-    notify("FireremoteFind", "Fired " .. count .. " remotes matching " .. target)
-end)
-
--- ============================================================
--- AUTOFIREREMOTE (loop with proper flag)
--- ============================================================
-local autoFireActive = false
-local autoFireThread = nil
-
-_G.Nexus.register("autofireremote", {"afr"}, "autofireremote <interval> <name>", "<interval> <name>", "Automatically fire a remote on interval", function(target, args)
-    local interval = tonumber(args[1]) or tonumber(target)
-    local name = args[2]
-
-    if not interval or not name then
-        notify("AutoFireRemote", "Usage: autofireremote <interval> <name>")
-        return
-    end
-
-    -- Stop the previous loop cleanly
-    autoFireActive = false
-    if autoFireThread then
-        pcall(function() task.cancel(autoFireThread) end)
-        autoFireThread = nil
-    end
-    task.wait(0.05)
-
-    autoFireActive = true
-    local lower = name:lower()
-
-    autoFireThread = task.spawn(function()
-        while autoFireActive do
-            for _, obj in ipairs(game:GetDescendants()) do
-                if not autoFireActive then break end
-                if obj:IsA("RemoteEvent") and obj.Name:lower():find(lower, 1, true) then
-                    pcall(function() obj:FireServer() end)
-                end
-            end
-            task.wait(interval)
-        end
+_G.Nexus.register("joinjobid", {"jjid"}, "joinjobid <jobid>", "<jobid>", "Join a specific server by JobId", function(target)
+    if not target then notify("JoinJobId", "Provide a JobId.") return end
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, target, LocalPlayer)
     end)
-    notify("AutoFireRemote", "Firing remotes matching " .. name)
-end)
-
-_G.Nexus.register("unautofireremote", {"unafr"}, "unautofireremote", "", "Stop auto firing", function()
-    autoFireActive = false
-    if autoFireThread then
-        pcall(function() task.cancel(autoFireThread) end)
-        autoFireThread = nil
-    end
-    notify("AutoFireRemote", "Stopped.")
-end)
-
--- ============================================================
--- BLOCKREMOTE (installs hook once)
--- ============================================================
-local blockedRemotes = {}
-local blockHookInstalled = false
-
-local function installBlockHook()
-    if blockHookInstalled then return end
-    if not getrawmetatable or not setreadonly or not newcclosure then
-        notify("BlockRemote", "Executor does not support hooking.")
-        return
-    end
-
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if method == "FireServer" and typeof(self) == "Instance" and self:IsA(""},RemoteEvent") then
-            local n = self.Name:lower()
-            for blocked in pairs(blockedRemotes) do
-                if n:find(blocked, 1, true) then
-                    return
-                end
-            end
-        end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
-    blockHookInstalled = true
-end
-
-_G.Nexus.register("blockremote", {"br "blockremote <name>", "<name>", "Block a remote from sending to the server", function(target)
-    if not target then notify("BlockRemote", "Provide a name.") return end
-    installBlockHook()
-    blockedRemotes[target:lower()] = true
-    notify("BlockRemote", "Blocked remotes matching " .. target)
-end)
-
-_G.Nexus.register("unblockremote", {"ubr"}, "unblockremote [name]", "[name]", "Unblock a remote or all", function(target)
-    if target then
-        blockedRemotes[target:lower()] = nil
-        notify("BlockRemote", "Unblocked " .. target)
+    if ok then
+        notify("JoinJobId", "Joining " .. target:sub(1, 8) .. "...")
     else
-        blockedRemotes = {}
-        notify("BlockRemote", "Unblocked all.")
+        notify("JoinJobId", "Failed: " .. tostring(err))
     end
 end)
 
 -- ============================================================
--- SERVERREMOTESPY (filters DescendantAdded properly)
+-- JOINSERVER
 -- ============================================================
-local serverRemoteSpyGui = nil
-local serverRemoteSpyConn = nil
-local spyEntries = {}
+_G.Nexus.register("joinserver", {"joinjid"}, "joinserver <jobid>", "<jobid>", "Join a server by JobId", function(target)
+    if not target then notify("JoinServer", "Provide a JobId.") return end
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, target, LocalPlayer)
+    end)
+    notify("JoinServer", "Joining...")
+end)
 
-local function buildSpyGui()
-    if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() end
-    spyEntries = {}
+-- ============================================================
+-- JOINGAME
+-- ============================================================
+_G.Nexus.register("joingame", {"joinplace"}, "joingame <placeId>", "<placeId>", "Join a game by PlaceId", function(target)
+    local id = tonumber(target)
+    if not id then notify("JoinGame", "Provide a PlaceId.") return end
+    local ok, err = pcall(function()
+        TeleportService:Teleport(id, LocalPlayer)
+    end)
+    if ok then
+        notify("JoinGame", "Joining place " .. id)
+    else
+        notify("JoinGame", "Failed: " .. tostring(err))
+    end
+end)
 
-    local CoreGui = game:GetService("CoreGui")
+-- ============================================================
+-- COPYTPTOGAME
+-- ============================================================
+_G.Nexus.register("copytptogame", {"cttg"}, "copytptogame", "", "Copy a script that teleports you to this game", function()
+    local str = string.format([[-- Nexus teleport script for game %d
+local TeleportService = game:GetService("TeleportService")
+TeleportService:Teleport(%d, game.Players.LocalPlayer)]], game.PlaceId, game.PlaceId)
+    pcall(function() if setclipboard then setclipboard(str) end end)
+    notify("CopyTpToGame", "Script copied (PlaceId " .. game.PlaceId .. ")")
+end)
+
+-- ============================================================
+-- COPYTPTOSERVER
+-- ============================================================
+_G.Nexus.register("copytptoserver", {"ctts"}, "copytptoserver", "", "Copy a script that teleports you to this exact server", function()
+    local str = string.format([[-- Nexus teleport script for server %s
+local TeleportService = game:GetService("TeleportService")
+TeleportService:TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)]], game.JobId, game.PlaceId, game.JobId)
+    pcall(function() if setclipboard then setclipboard(str) end end)
+    notify("CopyTpToServer", "Script copied.")
+end)
+
+-- ============================================================
+-- RESERVE (reserves and joins the private server)
+-- ============================================================
+_G.Nexus.register("reserve", {"reserveserver", "rs"}, "reserve", "", "Reserve a private server and teleport into it", function()
+    local ok, code, err = pcall(function()
+        return TeleportService:ReserveServer(game.PlaceId)
+    end)
+    if ok and code then
+        notify("Reserve", "Reserved. Teleporting...")
+        task.wait(1)
+        local ok2, err2 = pcall(function()
+            TeleportService:TeleportToPrivateServer(game.PlaceId, code, {LocalPlayer})
+        end)
+        if not ok2 then
+            notify("Reserve", "Failed to join: " .. tostring(err2))
+        end
+    else
+        notify("Reserve", "Failed: " .. tostring(code or err))
+    end
+end)
+
+-- ============================================================
+-- TELEPORT GUI
+-- ============================================================
+_G.Nexus.TeleportGui = _G.Nexus.TeleportGui or nil
+
+local function buildTeleportGui()
+    if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() end
+
     local gui = Instance.new("ScreenGui")
-    gui.Name = "NexusServerRemoteSpy"
+    gui.Name = "NexusTeleportGui"
     gui.ResetOnSpawn = false
     gui.Parent = CoreGui
+    _G.Nexus.TeleportGui = gui
 
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 500, 0, 400)
-    frame.Position = UDim2.new(0, 20, 0, 20)
+    frame.Size = UDim2.new(0, 400, 0, 180)
+    frame.Position = UDim2.new(0.5, -200, 0.5, -90)
     frame.BackgroundColor3 = Color3.fromRGB(17, 17, 20)
     frame.BorderSizePixel = 0
+    frame.Active = true
+    frame.Draggable = true
     frame.Parent = gui
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
+    corner.CornerRadius = UDim.new(0, 12)
     corner.Parent = frame
 
     local stroke = Instance.new("UIStroke")
@@ -1831,10 +1803,10 @@ local function buildSpyGui()
     stroke.Parent = frame
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -20, 0, 30)
-    title.Position = UDim2.new(0, 10, 0, 0)
+    title.Size = UDim2.new(1, -60, 0, 34)
+    title.Position = UDim2.new(0, 16, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Server Remote Spy"
+    title.Text = "Teleport to Place"
     title.TextColor3 = Color3.fromRGB(232, 232, 238)
     title.Font = Enum.Font.GothamBold
     title.TextSize = 14
@@ -1843,7 +1815,7 @@ local function buildSpyGui()
 
     local close = Instance.new("TextButton")
     close.Size = UDim2.new(0, 24, 0, 24)
-    close.Position = UDim2.new(1, -30, 0, 4)
+    close.Position = UDim2.new(1, -32, 0, 5)
     close.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
     close.BorderSizePixel = 0
     close.Text = "×"
@@ -1852,85 +1824,89 @@ local function buildSpyGui()
     close.TextSize = 16
     close.Parent = frame
 
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 5)
-    closeCorner.Parent = close
+    local cc = Instance.new("UICorner")
+    cc.CornerRadius = UDim.new(0, 5)
+    cc.Parent = close
 
     close.MouseButton1Click:Connect(function()
-        gui.Enabled = false
+        if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() _G.Nexus.TeleportGui = nil end
     end)
 
-    local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, -20, 1, -40)
-    scroll.Position = UDim2.new(0, 10, 0, 36)
-    scroll.BackgroundTransparency = 1
-    scroll.BorderSizePixel = 0
-    scroll.ScrollBarThickness = 4
-    scroll.ScrollBarImageColor3 = Color3.fromRGB(122, 122, 140)
-    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    scroll.Parent = frame
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, -32, 0, 40)
+    input.Position = UDim2.new(0, 16, 0, 50)
+    input.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
+    input.BorderSizePixel = 0
+    input.Text = ""
+    input.PlaceholderText = "PlaceId"
+    input.PlaceholderColor3 = Color3.fromRGB(74, 74, 90)
+    input.TextColor3 = Color3.fromRGB(232, 232, 238)
+    input.Font = Enum.Font.Gotham
+    input.TextSize = 13
+    input.Parent = frame
 
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Padding = UDim.new(0, 4)
-    listLayout.Parent = scroll
+    local ic = Instance.new("UICorner")
+    ic.CornerRadius = UDim.new(0, 8)
+    ic.Parent = input
 
-    serverRemoteSpyGui = gui
-    return scroll
-end
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -32, 0, 40)
+    button.Position = UDim2.new(0, 16, 0, 105)
+    button.BackgroundColor3 = Color3.fromRGB(61, 214, 140)
+    button.BorderSizePixel = 0
+    button.Text = "Teleport"
+    button.TextColor3 = Color3.fromRGB(17, 17, 20)
+    button.Font = Enum.Font.GothamBold
+    button.TextSize = 13
+    button.Parent = frame
 
-local function addSpyEntry(scroll, text)
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(1, 0, 0, 22)
-    lbl.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
-    lbl.BorderSizePixel = 0
-    lbl.Text = "  " .. text
-    lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
-    lbl.Font = Enum.Font.Code
-    lbl.TextSize = 11
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = scroll
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 8)
+    bc.Parent = button
 
-    local lc = Instance.new("UICorner")
-    lc.CornerRadius = UDim.new(0, 4)
-    lc.Parent = lbl
-
-    table.insert(spyEntries, lbl)
-end
-
-_G.Nexus.register("serverremotespy", {"srs", "sremotespy"}, "serverremotespy", "", "Log all remote events received from the server", function()
-    local scroll = buildSpyGui()
-
-    if serverRemoteSpyConn then
-        serverRemoteSpyConn:Disconnect()
-        serverRemoteSpyConn = nil
-    end
-
-    -- Log existing remotes as a starting point
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("RemoteEvent") then
-            addSpyEntry(scroll, obj:GetFullName())
-        end
-    end
-
-    serverRemoteSpyConn = game.DescendantAdded:Connect(function(obj)
-        if obj:IsA("RemoteEvent") then
-            addSpyEntry(scroll, obj:GetFullName())
-        end
+    button.MouseButton1Click:Connect(function()
+        local id = tonumber(input.Text)
+        if not id then notify("TeleportGui", "Invalid PlaceId.") return end
+        pcall(function() TeleportService:Teleport(id, LocalPlayer) end)
+        notify("TeleportGui", "Teleporting to " .. id)
     end)
+end
 
-    notify("ServerRemoteSpy", "Enabled.")
+_G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to teleport to any PlaceId", function()
+    buildTeleportGui()
+    notify("TeleportGui", "Opened.")
 end)
 
-_G.Nexus.register("unserverremotespy", {"unsrs"}, "unserverremotespy", "", "Stop server remote spy", function()
-    if serverRemoteSpyConn then serverRemoteSpyConn:Disconnect() serverRemoteSpyConn = nil end
-    if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() serverRemoteSpyGui = nil end
-    spyEntries = {}
-    notify("ServerRemoteSpy", "Disabled.")
+_G.Nexus.register("unteleportgui", {"untpui"}, "unteleportgui", "", "Close the teleport GUI", function()
+    if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() _G.Nexus.TeleportGui = nil end
+    notify("TeleportGui", "Closed.")
 end)
 
-print("[Nexus] Batch 8 loaded. Remotes II (fixed) ready.")
+-- ============================================================
+-- SERVERLIST
+-- ============================================================
+_G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active servers for this place in the console", function()
+    local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+    local ok, res = pcall(function() return game:HttpGet(url) end)
+    if not ok or not res then
+        notify("ServerList", "HTTP request failed.")
+        return
+    end
+    local decoded = nil
+    pcall(function() decoded = HttpService:JSONDecode(res) end)
+    if not decoded then
+        notify("ServerList", "Bad JSON response.")
+        return
+    end
+    local list = decoded.data or {}
+    print("[Nexus ServerList] " .. #list .. " servers found:")
+    for _, s in ipairs(list) do
+        print("  JobId: " .. s.id .. " | Playing: " .. s.playing .. "/" .. s.maxPlayers)
+    end
+    notify("ServerList", #list .. " servers printed to console.")
+end)
+
+print("[Nexus] Batch 13 loaded. Server II (fixed) ready.")
 -- ============================================================
 -- NEXUS - BATCH 9: TOOL II (FIXED)
 -- droptool, droptools, loopdroptools, unloopdroptools,
