@@ -1669,6 +1669,267 @@ end)
 
 print("[Nexus] Batch 7 loaded. NPC II (fixed) ready.")
 -- ============================================================
+-- NEXUS - BATCH 8: REMOTES II (FIXED)
+-- fireremotefind, autofireremote, unautofireremote,
+-- blockremote, unblockremote, serverremotespy, unserverremotespy
+-- ============================================================
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+local function notify(title, text)
+    if _G.Nexus.notify then _G.Nexus.notify(title, text) end
+end
+
+-- ============================================================
+-- FIREREMOTEFIND
+-- ============================================================
+_G.Nexus.register("fireremotefind", {"fremotefind"}, "fireremotefind <name>", "<name>", "Fire every remote whose name contains <name>", function(target)
+    if not target then notify("FireremoteFind", "Provide a name.") return end
+    local lower = target:lower()
+    local count = 0
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") and obj.Name:lower():find(lower, 1, true) then
+            pcall(function()
+                obj:FireServer()
+                count = count + 1
+            end)
+        end
+    end
+    notify("FireremoteFind", "Fired " .. count .. " remotes matching " .. target)
+end)
+
+-- ============================================================
+-- AUTOFIREREMOTE (loop with proper flag)
+-- ============================================================
+local autoFireActive = false
+local autoFireThread = nil
+
+_G.Nexus.register("autofireremote", {"afr"}, "autofireremote <interval> <name>", "<interval> <name>", "Automatically fire a remote on interval", function(target, args)
+    local interval = tonumber(args[1]) or tonumber(target)
+    local name = args[2]
+
+    if not interval or not name then
+        notify("AutoFireRemote", "Usage: autofireremote <interval> <name>")
+        return
+    end
+
+    autoFireActive = false
+    if autoFireThread then
+        pcall(function() task.cancel(autoFireThread) end)
+        autoFireThread = nil
+    end
+    task.wait(0.05)
+
+    autoFireActive = true
+    local lower = name:lower()
+
+    autoFireThread = task.spawn(function()
+        while autoFireActive do
+            for _, obj in ipairs(game:GetDescendants()) do
+                if not autoFireActive then break end
+                if obj:IsA("RemoteEvent") and obj.Name:lower():find(lower, 1, true) then
+                    pcall(function() obj:FireServer() end)
+                end
+            end
+            task.wait(interval)
+        end
+    end)
+    notify("AutoFireRemote", "Firing remotes matching " .. name)
+end)
+
+_G.Nexus.register("unautofireremote", {"unafr"}, "unautofireremote", "", "Stop auto firing", function()
+    autoFireActive = false
+    if autoFireThread then
+        pcall(function() task.cancel(autoFireThread) end)
+        autoFireThread = nil
+    end
+    notify("AutoFireRemote", "Stopped.")
+end)
+
+-- ============================================================
+-- BLOCKREMOTE (installs hook once)
+-- ============================================================
+local blockedRemotes = {}
+local blockHookInstalled = false
+
+local function installBlockHook()
+    if blockHookInstalled then return end
+    if not getrawmetatable or not setreadonly or not newcclosure then
+        notify("BlockRemote", "Executor does not support hooking.")
+        return
+    end
+
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if method == "FireServer" and typeof(self) == "Instance" and self:IsA("RemoteEvent") then
+            local n = self.Name:lower()
+            for blocked in pairs(blockedRemotes) do
+                if n:find(blocked, 1, true) then
+                    return
+                end
+            end
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+    blockHookInstalled = true
+end
+
+_G.Nexus.register("blockremote", {"br"}, "blockremote <name>", "<name>", "Block a remote from sending to the server", function(target)
+    if not target then notify("BlockRemote", "Provide a name.") return end
+    installBlockHook()
+    blockedRemotes[target:lower()] = true
+    notify("BlockRemote", "Blocked remotes matching " .. target)
+end)
+
+_G.Nexus.register("unblockremote", {"ubr"}, "unblockremote [name]", "[name]", "Unblock a remote or all", function(target)
+    if target then
+        blockedRemotes[target:lower()] = nil
+        notify("BlockRemote", "Unblocked " .. target)
+    else
+        blockedRemotes = {}
+        notify("BlockRemote", "Unblocked all.")
+    end
+end)
+
+-- ============================================================
+-- SERVERREMOTESPY (filters DescendantAdded properly)
+-- ============================================================
+local serverRemoteSpyGui = nil
+local serverRemoteSpyConn = nil
+local spyEntries = {}
+
+local function buildSpyGui()
+    if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() end
+    spyEntries = {}
+
+    local CoreGui = game:GetService("CoreGui")
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusServerRemoteSpy"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 500, 0, 400)
+    frame.Position = UDim2.new(0, 20, 0, 20)
+    frame.BackgroundColor3 = Color3.fromRGB(17, 17, 20)
+    frame.BorderSizePixel = 0
+    frame.Parent = gui
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = frame
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(45, 45, 55)
+    stroke.Thickness = 1
+    stroke.Parent = frame
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -20, 0, 30)
+    title.Position = UDim2.new(0, 10, 0, 0)
+    title.BackgroundTransparency = 1
+    title.Text = "Server Remote Spy"
+    title.TextColor3 = Color3.fromRGB(232, 232, 238)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 14
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Parent = frame
+
+    local close = Instance.new("TextButton")
+    close.Size = UDim2.new(0, 24, 0, 24)
+    close.Position = UDim2.new(1, -30, 0, 4)
+    close.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
+    close.BorderSizePixel = 0
+    close.Text = "×"
+    close.TextColor3 = Color3.fromRGB(232, 232, 238)
+    close.Font = Enum.Font.GothamBold
+    close.TextSize = 16
+    close.Parent = frame
+
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(0, 5)
+    closeCorner.Parent = close
+
+    close.MouseButton1Click:Connect(function()
+        gui.Enabled = false
+    end)
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -20, 1, -40)
+    scroll.Position = UDim2.new(0, 10, 0, 36)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(122, 122, 140)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.Parent = frame
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Padding = UDim.new(0, 4)
+    listLayout.Parent = scroll
+
+    serverRemoteSpyGui = gui
+    return scroll
+end
+
+local function addSpyEntry(scroll, text)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 22)
+    lbl.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
+    lbl.BorderSizePixel = 0
+    lbl.Text = "  " .. text
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = scroll
+
+    local lc = Instance.new("UICorner")
+    lc.CornerRadius = UDim.new(0, 4)
+    lc.Parent = lbl
+
+    table.insert(spyEntries, lbl)
+end
+
+_G.Nexus.register("serverremotespy", {"srs", "sremotespy"}, "serverremotespy", "", "Log all remote events received from the server", function()
+    local scroll = buildSpyGui()
+
+    if serverRemoteSpyConn then
+        serverRemoteSpyConn:Disconnect()
+        serverRemoteSpyConn = nil
+    end
+
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            addSpyEntry(scroll, obj:GetFullName())
+        end
+    end
+
+    serverRemoteSpyConn = game.DescendantAdded:Connect(function(obj)
+        if obj:IsA("RemoteEvent") then
+            addSpyEntry(scroll, obj:GetFullName())
+        end
+    end)
+
+    notify("ServerRemoteSpy", "Enabled.")
+end)
+
+_G.Nexus.register("unserverremotespy", {"unsrs"}, "unserverremotespy", "", "Stop server remote spy", function()
+    if serverRemoteSpyConn then serverRemoteSpyConn:Disconnect() serverRemoteSpyConn = nil end
+    if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() serverRemoteSpyGui = nil end
+    spyEntries = {}
+    notify("ServerRemoteSpy", "Disabled.")
+end)
+
+print("[Nexus] Batch 8 loaded. Remotes II (fixed) ready.")
+-- ============================================================
 -- NEXUS - BATCH 9: TOOL II (FIXED)
 -- droptool, droptools, loopdroptools, unloopdroptools,
 -- toolinvisible, untoolinvisible, preventtools, unpreventtools,
