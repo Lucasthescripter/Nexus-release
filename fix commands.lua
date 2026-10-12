@@ -3143,7 +3143,7 @@ end)
 
 print("[Nexus] Batch 12 loaded. Misc II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 13: SERVER II (FIXED)
+-- NEXUS - BATCH 13: SERVER II (FIXED, FINAL)
 -- joinjobid, joinserver, joingame, copytptogame,
 -- copytptoserver, reserve, teleportgui, unteleportgui,
 -- serverlist
@@ -3204,7 +3204,7 @@ end)
 -- ============================================================
 -- COPYTPTOGAME
 -- ============================================================
-_G.Nexus.register("copytptogame", {"cttg"}, "copytptogame", "", "Copy a script that teleports you " to this game", function()
+_G.Nexus.register("copytptogame", {"cttg"}, "copytptogame", "", "Copy a script that teleports you to this game", function()
     local str = string.format([[-- Nexus teleport script for game %d
 local TeleportService = game:GetService("TeleportService")
 TeleportService:Teleport(%d, game.Players.LocalPlayer)]], game.PlaceId, game.PlaceId)
@@ -3215,7 +3215,7 @@ end)
 -- ============================================================
 -- COPYTPTOSERVER
 -- ============================================================
-_G.Nexus.register("copytptoserver", {"ctts"},copytptoserver", "", "Copy a script that teleports you to this exact server", function()
+_G.Nexus.register("copytptoserver", {"ctts"}, "copytptoserver", "", "Copy a script that teleports you to this exact server", function()
     local str = string.format([[-- Nexus teleport script for server %s
 local TeleportService = game:GetService("TeleportService")
 TeleportService:TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)]], game.JobId, game.PlaceId, game.JobId)
@@ -3224,7 +3224,7 @@ TeleportService:TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)]], g
 end)
 
 -- ============================================================
--- RESERVE (now actually joins the reserved server)
+-- RESERVE (reserves and joins the private server)
 -- ============================================================
 _G.Nexus.register("reserve", {"reserveserver", "rs"}, "reserve", "", "Reserve a private server and teleport into it", function()
     local ok, code, err = pcall(function()
@@ -3245,7 +3245,7 @@ _G.Nexus.register("reserve", {"reserveserver", "rs"}, "reserve", "", "Reserve a 
 end)
 
 -- ============================================================
--- TELEPORT GUI (properly managed in global state)
+-- TELEPORT GUI
 -- ============================================================
 _G.Nexus.TeleportGui = _G.Nexus.TeleportGui or nil
 
@@ -3357,7 +3357,7 @@ _G.Nexus.register("unteleportgui", {"untpui"}, "unteleportgui", "", "Close the t
 end)
 
 -- ============================================================
--- SERVERLIST (json decode in pcall)
+-- SERVERLIST
 -- ============================================================
 _G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active servers for this place in the console", function()
     local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
@@ -3380,7 +3380,7 @@ _G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active server
     notify("ServerList", #list .. " servers printed to console.")
 end)
 
-print("[Nexus] Batch 13 loaded. Server II (fixed) ready.")
+print("[Nexus] Batch 13 loaded. Server II (fixed, final) ready.")
 -- ============================================================
 -- NEXUS - BATCH 14: FUN / MISC III (FIXED)
 -- hamster, unhamster, cig, uncig, cigar, uncigar, pipe, unpipe,
