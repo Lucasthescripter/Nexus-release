@@ -3227,15 +3227,9 @@ end)
 -- KILL
 -- ============================================================
 _G.Nexus.register("kill", {}, "kill <player>", "<player>", "Set a player's health to 0", function(target)
-    if not target then
-        notify("Kill", "Provide a target.")
-        return
-    end
-    local plr = findPlayer(target)
-    if not plr or not plr.Character then
-        notify("Kill", "Player not found.")
-        return
-    end
+    if not target then notify("KKill", "Provide a target.") returnick end
+    local plr = findPlayer(target",)
+    if not plr or not pl "r.Character then notify("Kill", "PlayerPlayer not found.") return end
     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
     if hum then hum.Health = 0 end
     notify("Kill", "Killed " .. plr.Name)
@@ -3270,6 +3264,75 @@ end)
 _G.Nexus.register("unloopbring", {"unlbring"}, "unloopbring", "", "Stop all loop brings", function()
     for plr in pairs(loopBringThreads) do loopBringThreads[plr] = nil end
     notify("LoopBring", "Stopped.")
+end)
+
+-- ============================================================
+-- VEHICLE FLING KICK (the one from the beginning)
+-- ============================================================
+local FLING_SPEED = 5000
+local TP_OFFSET = 3
+
+local function findNearestCar(maxDist)
+    local hrp = getHRP()
+    if not hrp then return nil end
+    local myPos = hrp.Position
+    local closest, closestDist = nil, maxDist or 30
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("VehicleSeat") then
+            local car = obj:FindFirstAncestorOfClass("Model")
+            if car and car.PrimaryPart then
+                local dist = (car.PrimaryPart.Position - myPos).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closest = car
+                end
+            end
+        end
+    end
+    return closest
+end
+
+_G.Nexus.register("flingkick", {"vflingkick", "fk"}, "flingkick <player>", "<player>", "Vehicle fling kick (gets target kicked by anti-cheat)", function(target)
+    if not target then notify("FlingKick", "Provide a target.") return end
+    local plr = findPlayer(target)
+    if not plr or not plr.Character then notify("Fling not found.") return end
+    local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
+    if not tHRP then return end
+
+    local car = findNearestCar(40)
+    if not car then notify("FlingKick", "No vehicle within 40 studs.") return end
+
+    -- Sit in the car
+    local seat
+    for _, d in ipairs(car:GetDescendants()) do
+        if d:IsA("VehicleSeat") then seat = d break end
+    end
+    if not seat then notify("FlingKick", "No seat found.") return end
+
+    local hrp = getHRP()
+    hrp.CFrame = seat.CFrame
+    task.wait(0.1)
+    seat:Sit(LocalPlayer.Character:FindFirstChildOfClass("Humanoid"))
+    task.wait(0.2)
+
+    -- Unseat and fling the car at the target
+    local hum = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if hum then hum.Sit = false end
+    task.wait(0.1)
+
+    if car.PrimaryPart then
+        car:PivotTo(CFrame.new((tHRP.CFrame + tHRP.CFrame.LookVector * -TP_OFFSET).Position, tHRP.Position))
+    end
+    task.wait(0.05)
+
+    for _, part in ipairs(car:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.AssemblyLinearVelocity = (tHRP.Position - part.Position).Unit * FLING_SPEED
+            part.AssemblyAngularVelocity = Vector3.new(FLING_SPEED, FLING_SPEED, FLING_SPEED)
+        end
+    end
+
+    notify("FlingKick", "Launched vehicle at " .. plr.Name)
 end)
 
 print("[Nexus] Layer 2 Part 4 loaded. Fling / damage commands ready.")
@@ -4975,7 +5038,7 @@ end
 
 print("[Nexus] Layer 2 Part 9 loaded. Protection and spoofing commands ready.")
 -- ============================================================
--- NEXUS - BATCH 1: MOVEMENT PLUS
+-- NEXUS - BATCH 1: MOVEMENT PLUS (FIXED)
 -- tpwalk, tpjump, flyjump, airwalk, wallwalk, climb,
 -- airmomentum, breakvelocity, maxslopeangle
 -- ============================================================
@@ -5000,7 +5063,7 @@ local function getHum()
 end
 
 -- ============================================================
--- TPWALK (teleport-based speed that is hard to detect)
+-- TPWALK (teleport-based movement)
 -- ============================================================
 local tpwalkConn = nil
 local TPWALK_AMOUNT = 2
@@ -5032,12 +5095,13 @@ end)
 -- TPJUMP
 -- ============================================================
 local TPJUMP_HEIGHT = 5
+local tpJumpConn = nil
 
 _G.Nexus.register("tpjump", {}, "tpjump <number>", "<number>", "Teleport up on jump instead of using JumpPower", function(target, args)
     local n = tonumber(args[1]) or tonumber(target)
     if n then TPJUMP_HEIGHT = n end
-    if _G.Nexus._tpjumpConn then _G.Nexus._tpjumpConn:Disconnect() end
-    _G.Nexus._tpjumpConn = UserInputService.JumpRequest:Connect(function()
+    if tpJumpConn then tpJumpConn:Disconnect() end
+    tpJumpConn = UserInputService.JumpRequest:Connect(function()
         local hrp = getHRP()
         if hrp then
             hrp.CFrame = hrp.CFrame + Vector3.new(0, TPJUMP_HEIGHT, 0)
@@ -5047,7 +5111,7 @@ _G.Nexus.register("tpjump", {}, "tpjump <number>", "<number>", "Teleport up on j
 end)
 
 _G.Nexus.register("untpjump", {}, "untpjump", "", "Stop tpjump", function()
-    if _G.Nexus._tpjumpConn then _G.Nexus._tpjumpConn:Disconnect() _G.Nexus._tpjumpConn = nil end
+    if tpJumpConn then tpJumpConn:Disconnect() tpJumpConn = nil end
     notify("TpJump", "Disabled.")
 end)
 
@@ -5098,22 +5162,35 @@ _G.Nexus.register("unairwalk", {"unfloat", "unaw"}, "unairwalk", "", "Stop airwa
 end)
 
 -- ============================================================
--- WALLWALK
+-- WALLWALK (REWRITTEN so it actually works)
 -- ============================================================
-local wallwalkActive = false
+local wallwalkConn = nil
 
 _G.Nexus.register("wallwalk", {}, "wallwalk", "", "Walk on walls", function()
-    wallwalkActive = true
     local hum = getHum()
     if hum then
         hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, true)
         hum.MaxSlopeAngle = 89
     end
-    notify("WallWalk", "Enabled. Walk into any wall.")
+    if wallwalkConn then wallwalkConn:Disconnect() end
+    wallwalkConn = RunService.Heartbeat:Connect(function()
+        local h = getHum()
+        if not h then return end
+        h.MaxSlopeAngle = 89
+        -- Force climbing state whenever touching any wall so you stick
+        local state = h:GetState()
+        if state == Enum.HumanoidStateType.Running
+            or state == Enum.HumanoidStateType.RunningNoPhysics
+            or state == Enum.HumanoidStateType.Freefall
+        then
+            h:ChangeState(Enum.HumanoidStateType.Climbing)
+        end
+    end)
+    notify("WallWalk", "Enabled.")
 end)
 
 _G.Nexus.register("unwallwalk", {}, "unwallwalk", "", "Stop wallwalk", function()
-    wallwalkActive = false
+    if wallwalkConn then wallwalkConn:Disconnect() wallwalkConn = nil end
     local hum = getHum()
     if hum then hum.MaxSlopeAngle = 45 end
     notify("WallWalk", "Disabled.")
@@ -5152,7 +5229,7 @@ local AIR_MOMENTUM_SPEED = 5
 _G.Nexus.register("airmomentum", {"aircontrol"}, "airmomentum [speed]", "[speed]", "Better air control", function(target, args)
     local speed = tonumber(args[1]) or tonumber(target) or AIR_MOMENTUM_SPEED
     AIR_MOMENTUM_SPEED = speed
-    if airMomentumConn then return end
+    if airMomentumConn then airMomentumConn:Disconnect() end
     airMomentumConn = RunService.Heartbeat:Connect(function()
         local hum = getHum()
         local hrp = getHRP()
@@ -5186,6 +5263,8 @@ end)
 -- ============================================================
 -- MAX SLOPE ANGLE
 -- ============================================================
+local msaConn = nil
+
 _G.Nexus.register("maxslopeangle", {"msa"}, "maxslopeangle <number>", "<number>", "Change your MaxSlopeAngle", function(target, args)
     local n = tonumber(args[1]) or tonumber(target)
     if not n then return end
@@ -5199,8 +5278,8 @@ end)
 _G.Nexus.register("loopmaxslopeangle", {"lmsa"}, "loopmaxslopeangle <number>", "<number>", "Lock MaxSlopeAngle", function(target, args)
     local n = tonumber(args[1]) or tonumber(target)
     if not n then return end
-    if _G.Nexus._msaConn then _G.Nexus._msaConn:Disconnect() end
-    _G.Nexus._msaConn = RunService.Heartbeat:Connect(function()
+    if msaConn then msaConn:Disconnect() end
+    msaConn = RunService.Heartbeat:Connect(function()
         local hum = getHum()
         if hum then hum.MaxSlopeAngle = n end
     end)
@@ -5208,14 +5287,15 @@ _G.Nexus.register("loopmaxslopeangle", {"lmsa"}, "loopmaxslopeangle <number>", "
 end)
 
 _G.Nexus.register("unloopmaxslopeangle", {"unlmsa"}, "unloopmaxslopeangle", "", "Stop locking MaxSlopeAngle", function()
-    if _G.Nexus._msaConn then _G.Nexus._msaConn:Disconnect() _G.Nexus._msaConn = nil end
+    if msaConn then msaConn:Disconnect() msaConn = nil end
     notify("MaxSlopeAngle", "Unlocked.")
 end)
 
-print("[Nexus] Batch 1 loaded. Movement Plus ready.")
+print("[Nexus] Batch 1 loaded. Movement Plus (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 2: HITBOX / REACH
--- hitbox, unhitbox, boxreach, reach, resetreach, aura, unaura
+-- NEXUS - BATCH 2: HITBOX / REACH (FIXED)
+-- hitbox, unhitbox, boxreach, reach, resetreach, aura,
+-- unaura, npcaura, unnpcaura, hitboxes, unhitboxes
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -5255,32 +5335,46 @@ _G.Nexus.register("hitbox", {"hbox"}, "hitbox <player> [size] [part]", "<player>
     notify("Hitbox", "Expanded " .. plr.Name .. "'s " .. partName)
 end)
 
-_G.Nexus.register("unhitbox", {"unhbox"}, "unhitbox <player>", "<player>", "Reset a player's hitbox", function(target)
+_G.Nexus.register("unhitbox", {"unhbox"}, "unhitbox [player]", "[player]", "Reset a player's hitbox or all", function(target)
     if not target then
+        local count = 0
         for part, size in pairs(originalSizes) do
             if part and part.Parent then
                 part.Size = size
+                part.Transparency = 0
+                part.CanCollide = true
+                part.Massless = false
+                count = count + 1
             end
+            originalSizes[part] = nil
         end
         originalSizes = {}
-        notify("Hitbox", "Reset all.")
+        notify("Hitbox", "Reset " .. count .. " hitboxes.")
         return
     end
     local plr = findPlayer(target)
-    if not plr or not plr.Character then return end
+    if not plr or not plr.Character then
+        notify("Hitbox", "Player not found.")
+        return
+    end
+    local count = 0
     for _, part in ipairs(plr.Character:GetDescendants()) do
         if originalSizes[part] then
             part.Size = originalSizes[part]
+            part.Transparency = 0
+            part.CanCollide = true
+            part.Massless = false
             originalSizes[part] = nil
+            count = count + 1
         end
     end
-    notify("Hitbox", "Reset for " .. plr.Name)
+    notify("Hitbox", "Reset " .. count .. " parts for " .. plr.Name)
 end)
 
 -- ============================================================
--- REACH (extend your sword reach)
+-- REACH (extend your sword reach) - per-tool memory
 -- ============================================================
-local originalReachSize
+local originalHandleSizes = {}
 
 _G.Nexus.register("reach", {"swordreach"}, "reach [number] [part]", "[number] [part]", "Extend your tool's reach", function(target, args)
     local size = tonumber(args[1]) or tonumber(target) or 30
@@ -5291,7 +5385,7 @@ _G.Nexus.register("reach", {"swordreach"}, "reach [number] [part]", "[number] [p
         if tool:IsA("Tool") then
             local part = tool:FindFirstChild(partName)
             if part then
-                originalReachSize = originalReachSize or part.Size
+                originalHandleSizes[part] = originalHandleSizes[part] or part.Size
                 part.Size = Vector3.new(size, size, size)
                 part.Transparency = 0.7
                 part.CanCollide = false
@@ -5307,20 +5401,25 @@ end)
 _G.Nexus.register("resetreach", {"unreach", "normalreach"}, "resetreach", "", "Reset your tool reach", function()
     local char = LocalPlayer.Character
     if not char then return end
+    local count = 0
     for _, tool in ipairs(char:GetChildren()) do
         if tool:IsA("Tool") then
             local part = tool:FindFirstChild("Handle")
-            if part and originalReachSize then
-                part.Size = originalReachSize
+            if part and originalHandleSizes[part] then
+                part.Size = originalHandleSizes[part]
+                part.Transparency = 0
+                part.CanCollide = true
+                part.Massless = false
+                originalHandleSizes[part] = nil
+                count = count + 1
             end
         end
     end
-    originalReachSize = nil
-    notify("Reach", "Reset.")
+    notify("Reach", "Reset " .. count .. " handles.")
 end)
 
 -- ============================================================
--- BOXREACH (box-shaped hitbox around your tool)
+-- BOXREACH (box-shaped hitbox around your character)
 -- ============================================================
 local boxReachInstances = {}
 
@@ -5364,9 +5463,9 @@ _G.Nexus.register("unboxreach", {}, "unboxreach", "", "Remove box reach", functi
 end)
 
 -- ============================================================
--- AURA (constant touch damage with equipped tool)
+-- AURA (auto-attack with equipped tool) - throttled so it does not crash
 -- ============================================================
-local auraConn
+local auraConn = nil
 
 _G.Nexus.register("aura", {}, "aura [radius]", "[radius]", "Auto-attack nearby players", function(target, args)
     local radius = tonumber(args[1]) or tonumber(target) or 15
@@ -5376,17 +5475,17 @@ _G.Nexus.register("aura", {}, "aura [radius]", "[radius]", "Auto-attack nearby p
         if not char then return end
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
+        local tool = char:FindFirstChildWhichIsA("Tool")
+        if not tool then return end
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
                 if tHRP and (tHRP.Position - hrp.Position).Magnitude <= radius then
-                    local tool = char:FindFirstChildWhichIsA("Tool")
-                    if tool then
-                        pcall(function() tool:Activate() end)
-                    end
+                    pcall(function() tool:Activate() end)
                 end
             end
         end
+        task.wait(0.1)
     end)
     notify("Aura", "Enabled (radius " .. radius .. ")")
 end)
@@ -5399,7 +5498,7 @@ end)
 -- ============================================================
 -- NPC AURA
 -- ============================================================
-local npcAuraConn
+local npcAuraConn = nil
 
 _G.Nexus.register("npcaura", {}, "npcaura [radius]", "[radius]", "Auto-attack nearby NPCs", function(target, args)
     local radius = tonumber(args[1]) or tonumber(target) or 15
@@ -5421,6 +5520,7 @@ _G.Nexus.register("npcaura", {}, "npcaura [radius]", "[radius]", "Auto-attack ne
                 end
             end
         end
+        task.wait(0.1)
     end)
     notify("NpcAura", "Enabled.")
 end)
@@ -5460,9 +5560,9 @@ _G.Nexus.register("unhitboxes", {}, "unhitboxes", "", "Hide hitbox outlines", fu
     notify("Hitboxes", "Hidden.")
 end)
 
-print("[Nexus] Batch 2 loaded. Hitbox / Reach ready.")
+print("[Nexus] Batch 2 loaded. Hitbox / Reach (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 3: AIMBOT / TRIGGERBOT
+-- NEXUS - BATCH 3: AIMBOT / TRIGGERBOT (FIXED)
 -- aimbot, triggerbot
 -- ============================================================
 
@@ -5477,15 +5577,18 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- AIMBOT (basic nearest-player camera lock)
+-- AIMBOT (smooth camera lock on nearest player)
 -- ============================================================
 local aimbotConn = nil
 local AIMBOT_KEY = Enum.KeyCode.E
 local AIMBOT_FOV = 200
+local AIMBOT_SMOOTH = 0.25
 
-_G.Nexus.register("aimbot", {"aim"}, "aimbot [fov]", "[fov]", "Lock camera onto nearest player (hold E)", function(target, args)
+_G.Nexus.register("aimbot", {"aim"}, "aimbot [fov] [smooth]", "[fov] [smooth]", "Lock camera onto nearest player (hold E)", function(target, args)
     local fov = tonumber(args[1]) or tonumber(target)
     if fov then AIMBOT_FOV = fov end
+    local smooth = tonumber(args[2])
+    if smooth then AIMBOT_SMOOTH = smooth end
 
     if aimbotConn then
         notify("Aimbot", "Already enabled.")
@@ -5518,7 +5621,9 @@ _G.Nexus.register("aimbot", {"aim"}, "aimbot [fov]", "[fov]", "Lock camera onto 
         end
 
         if closest then
-            Camera.CFrame = CFrame.new(Camera.CFrame.Position, closest.Position)
+            -- Smooth lerp instead of snapping
+            local targetCF = CFrame.new(Camera.CFrame.Position, closest.Position)
+            Camera.CFrame = Camera.CFrame:Lerp(targetCF, AIMBOT_SMOOTH)
         end
     end)
 
@@ -5534,41 +5639,52 @@ _G.Nexus.register("unaimbot", {"unaim"}, "unaimbot", "", "Stop aimbot", function
 end)
 
 -- ============================================================
--- TRIGGERBOT (auto-fire when mouse is over an enemy)
+-- TRIGGERBOT (auto-fire on enemy under crosshair)
 -- ============================================================
 local triggerbotConn = nil
+local TRIGGER_FOV = 30
+local TRIGGER_COOLDOWN = 0.05
 
-_G.Nexus.register("triggerbot", {"tbot"}, "triggerbot [fov]", "[fov]", "Auto-activate tool when an enemy is under your crosshair", function(target, args)
-    local fov = tonumber(args[1]) or tonumber(target) or 30
+_G.Nexus.register("triggerbot", {"tbot"}, "triggerbot [fov] [cooldown]", "[fov] [cooldown]", "Auto-activate tool when an enemy is under your crosshair", function(target, args)
+    local fov = tonumber(args[1]) or tonumber(target) or TRIGGER_FOV
+    if fov then TRIGGER_FOV = fov end
+    local cd = tonumber(args[2])
+    if cd then TRIGGER_COOLDOWN = cd end
 
     if triggerbotConn then
         notify("Triggerbot", "Already enabled.")
         return
     end
 
+    local lastFire = 0
+
     triggerbotConn = RunService.RenderStepped:Connect(function()
         local myChar = LocalPlayer.Character
         local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
         if not myHRP then return end
 
-        local mouse = UserInputService:GetMouseLocation()
-        local camera = workspace.CurrentCamera
-        local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-        local dist = (mouse - center).Magnitude
-
-        if dist > fov then return end
+        -- Project the mouse into the camera properly
+        local mouse2D = UserInputService:GetMouseLocation()
+        local ray = Camera:ViewportPointToRay(mouse2D.X, mouse2D.Y)
+        local rayOrigin = ray.Origin
+        local rayDir = ray.Direction * 150
 
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    local screenPos, onScreen = camera:WorldToViewportPoint(hrp.Position)
-                    if onScreen then
-                        local offset = (Vector2.new(screenPos.X, screenPos.Y) - mouse).Magnitude
-                        if offset < fov then
-                            local tool = myChar:FindFirstChildWhichIsA("Tool")
-                            if tool then
-                                pcall(function() tool:Activate() end)
+                    local toTarget = hrp.Position - rayOrigin
+                    local proj = toTarget:Dot(rayDir.Unit)
+                    if proj > 0 and proj < 150 then
+                        local closestPoint = rayOrigin + rayDir.Unit * proj
+                        local perpDist = (hrp.Position - closestPoint).Magnitude
+                        if perpDist <= TRIGGER_FOV / 10 then
+                            if tick() - lastFire >= TRIGGER_COOLDOWN then
+                                local tool = myChar:FindFirstChildWhichIsA("Tool")
+                                if tool then
+                                    pcall(function() tool:Activate() end)
+                                    lastFire = tick()
+                                end
                             end
                             break
                         end
@@ -5578,7 +5694,7 @@ _G.Nexus.register("triggerbot", {"tbot"}, "triggerbot [fov]", "[fov]", "Auto-act
         end
     end)
 
-    notify("Triggerbot", "Enabled (fov " .. fov .. ").")
+    notify("Triggerbot", "Enabled (fov " .. TRIGGER_FOV .. ").")
 end)
 
 _G.Nexus.register("untriggerbot", {"untbot"}, "untriggerbot", "", "Stop triggerbot", function()
@@ -5589,12 +5705,13 @@ _G.Nexus.register("untriggerbot", {"untbot"}, "untriggerbot", "", "Stop triggerb
     notify("Triggerbot", "Disabled.")
 end)
 
-print("[Nexus] Batch 3 loaded. Aimbot / Triggerbot ready.")
+print("[Nexus] Batch 3 loaded. Aimbot / Triggerbot (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 4: PLAYER INTERACTION
+-- NEXUS - BATCH 4: PLAYER INTERACTION (FIXED)
 -- piggyback, unpiggyback, headsit, unheadsit, headstand,
--- unheadstand, orbit, unorbit, follow, unfollow, pathfind,
--- watch, unwatch, spook, unspook, glue, unglue
+-- unheadstand, orbit, unorbit, uporbit, unuporbit, follow,
+-- unfollow, pathfind, unpathfind, watch, unwatch, spook,
+-- glue, unglue
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -5619,7 +5736,7 @@ end
 -- ============================================================
 -- PIGGYBACK
 -- ============================================================
-local piggybackConn
+local piggybackConn = nil
 
 _G.Nexus.register("piggyback", {"pback"}, "piggyback <player>", "<player>", "Ride on another player's back", function(target)
     if not target then notify("Piggyback", "Provide a target.") return end
@@ -5647,7 +5764,7 @@ end)
 -- ============================================================
 -- HEADSIT
 -- ============================================================
-local headsitConn
+local headsitConn = nil
 
 _G.Nexus.register("headsit", {}, "headsit <player>", "<player>", "Sit on a player's head", function(target)
     if not target then notify("HeadSit", "Provide a target.") return end
@@ -5675,7 +5792,7 @@ end)
 -- ============================================================
 -- HEADSTAND
 -- ============================================================
-local headstandConn
+local headstandConn = nil
 
 _G.Nexus.register("headstand", {}, "headstand <player>", "<player>", "Stand on a player's head", function(target)
     if not target then notify("HeadStand", "Provide a target.") return end
@@ -5703,7 +5820,7 @@ end)
 -- ============================================================
 -- ORBIT
 -- ============================================================
-local orbitConn
+local orbitConn = nil
 local orbitAngle = 0
 
 _G.Nexus.register("orbit", {}, "orbit <player> <distance> [speed]", "<player> <distance> [speed]", "Orbit around a player", function(target, args)
@@ -5735,9 +5852,9 @@ _G.Nexus.register("unorbit", {}, "unorbit", "", "Stop orbiting", function()
 end)
 
 -- ============================================================
--- UPO RBIT (orbit on the vertical axis)
+-- UPO RBIT
 -- ============================================================
-local uporbitConn
+local uporbitConn = nil
 local uporbitAngle = 0
 
 _G.Nexus.register("uporbit", {}, "uporbit <player> <distance> [speed]", "<player> <distance> [speed]", "Orbit around a player vertically", function(target, args)
@@ -5769,9 +5886,9 @@ _G.Nexus.register("unuporbit", {}, "unuporbit", "", "Stop up-orbit", function()
 end)
 
 -- ============================================================
--- FOLLOW (simple heartbeat follow)
+-- FOLLOW
 -- ============================================================
-local followConn
+local followConn = nil
 
 _G.Nexus.register("follow", {"stalk"}, "follow <player>", "<player>", "Follow a player", function(target)
     if not target then notify("Follow", "Provide a target.") return end
@@ -5800,48 +5917,56 @@ _G.Nexus.register("unfollow", {"unstalk"}, "unfollow", "", "Stop following", fun
 end)
 
 -- ============================================================
--- PATHFIND
+-- PATHFIND (threaded, not heartbeat, fixed lag)
 -- ============================================================
-local pathfindConn
+local pathfindThread = nil
 
 _G.Nexus.register("pathfind", {"pf"}, "pathfind <player>", "<player>", "Pathfind to a player with the pathfinding API", function(target)
     if not target then notify("Pathfind", "Provide a target.") return end
     local plr = findPlayer(target)
     if not plr or not plr.Character then notify("Pathfind", "Player not found.") return end
 
-    if pathfindConn then pathfindConn:Disconnect() end
+    if pathfindThread then
+        notify("Pathfind", "Already running.")
+        return
+    end
 
-    pathfindConn = RunService.Heartbeat:Connect(function()
-        local char = getChar()
-        if not char or not plr.Character then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
-        if not hum or not tHRP then return end
-
-        local path = PathfindingService:CreatePath()
-        local ok = pcall(function()
-            path:ComputeAsync(char.HumanoidRootPart.Position, tHRP.Position)
-        end)
-        if ok and path.Status == Enum.PathStatus.Success then
-            local waypoints = path:GetWaypoints()
-            for _, wp in ipairs(waypoints) do
-                hum:MoveTo(wp.Position)
-                task.wait(0.3)
+    pathfindThread = task.spawn(function()
+        while pathfindThread do
+            local char = getChar()
+            if char and plr.Character then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
+                if hum and tHRP then
+                    local path = PathfindingService:CreatePath()
+                    local ok = pcall(function()
+                        path:ComputeAsync(char.HumanoidRootPart.Position, tHRP.Position)
+                    end)
+                    if ok and path.Status == Enum.PathStatus.Success then
+                        local waypoints = path:GetWaypoints()
+                        for _, wp in ipairs(waypoints) do
+                            if not pathfindThread then return end
+                            hum:MoveTo(wp.Position)
+                            task.wait(0.4)
+                        end
+                    end
+                end
             end
+            task.wait(0.5)
         end
     end)
     notify("Pathfind", "Following " .. plr.Name)
 end)
 
 _G.Nexus.register("unpathfind", {}, "unpathfind", "", "Stop pathfinding", function()
-    if pathfindConn then pathfindConn:Disconnect() pathfindConn = nil end
+    pathfindThread = nil
     notify("Pathfind", "Stopped.")
 end)
 
 -- ============================================================
 -- WATCH (spectate)
 -- ============================================================
-local watchConn
+local watchConn = nil
 
 _G.Nexus.register("watch", {"spec", "spectate"}, "watch <player>", "<player>", "Spectate a player", function(target)
     if not target then notify("Watch", "Provide a target.") return end
@@ -5871,7 +5996,7 @@ _G.Nexus.register("unwatch", {"unspec", "unspectate"}, "unwatch", "", "Stop spec
 end)
 
 -- ============================================================
--- SPOOK (teleport next to a player briefly)
+-- SPOOK
 -- ============================================================
 _G.Nexus.register("spook", {"scare"}, "spook <player>", "<player>", "Teleport next to a player briefly", function(target)
     if not target then notify("Spook", "Provide a target.") return end
@@ -5890,9 +6015,9 @@ _G.Nexus.register("spook", {"scare"}, "spook <player>", "<player>", "Teleport ne
 end)
 
 -- ============================================================
--- GLUE (loop teleport to a player)
+-- GLUE
 -- ============================================================
-local glueConn
+local glueConn = nil
 
 _G.Nexus.register("glue", {"loopgoto"}, "glue <player>", "<player>", "Constantly teleport to a player", function(target)
     if not target then notify("Glue", "Provide a target.") return end
@@ -5917,16 +6042,17 @@ _G.Nexus.register("unglue", {"unloopgoto"}, "unglue", "", "Stop glue", function(
     notify("Glue", "Stopped.")
 end)
 
-print("[Nexus] Batch 4 loaded. Player Interaction ready.")
+print("[Nexus] Batch 4 loaded. Player Interaction (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 5: MOVEMENT II
--- tpup, tpdown, tweenTo, tweenGotToCamPos, tweengoto,
--- tponeat, fly2, unFly2, thrup
+-- NEXUS - BATCH 5: MOVEMENT II (FIXED)
+-- tpup, tpdown, tweengoto, tweengotocampos, gotocampos,
+-- tponeat, fly2, unfly2, thru
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
@@ -5966,24 +6092,31 @@ _G.Nexus.register("tpdown", {"down"}, "tpdown <studs>", "<studs>", "Teleport dow
 end)
 
 -- ============================================================
--- TWEEN TO (smooth teleport that bypasses some anti-cheats)
+-- TWEEN TO (safe tween that cancels the last one)
 -- ============================================================
+local currentTween = nil
+
 local function tweenTo(targetCFrame, duration)
     local hrp = getHRP()
     if not hrp then return end
+    if currentTween then
+        pcall(function() currentTween:Cancel() end)
+        currentTween = nil
+    end
     duration = duration or 0.2
-    local tween = TweenService:Create(hrp, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = targetCFrame })
-    tween:Play()
-    return tween
+    currentTween = TweenService:Create(hrp, TweenInfo.new(duration, Enum.EasingStyle.Linear), { CFrame = targetCFrame })
+    currentTween:Play()
+    return currentTween
 end
 
-_G.Nexus.register("tweengoto", {"tweento", "tgoto"}, "tweengoto <player>", "<player>", "Smoothly tween to a player", function(target)
+_G.Nexus.register("tweengoto", {"tweento", "tgoto"}, "tweengoto <player> [duration]", "<player> [duration]", "Smoothly tween to a player", function(target, args)
     if not target then notify("TweenGoto", "Provide a target.") return end
     local plr = findPlayer(target)
     if not plr or not plr.Character then notify("TweenGoto", "Player not found.") return end
+    local duration = tonumber(args[1]) or 0.2
     local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
     if tHRP then
-        tweenTo(tHRP.CFrame + Vector3.new(0, 2, 0))
+        tweenTo(tHRP.CFrame + Vector3.new(0, 2, 0), duration)
         notify("TweenGoto", "Tweened to " .. plr.Name)
     end
 end)
@@ -5991,10 +6124,11 @@ end)
 -- ============================================================
 -- TWEEN TO CAMERA POSITION
 -- ============================================================
-_G.Nexus.register("tweengotocampos", {"tweentcp", "tocampos", "tcp"}, "tweengotocampos", "", "Tween to your camera position", function()
+_G.Nexus.register("tweengotocampos", {"tweentcp", "tocampos", "tcp"}, "tweengotocampos [duration]", "[duration]", "Tween to your camera position", function(target, args)
+    local duration = tonumber(args[1]) or tonumber(target) or 0.2
     local hrp = getHRP()
     if hrp and Camera then
-        tweenTo(CFrame.new(Camera.CFrame.Position))
+        tweenTo(CFrame.new(Camera.CFrame.Position), duration)
         notify("TweenToCamPos", "Moved to camera position.")
     end
 end)
@@ -6011,7 +6145,7 @@ _G.Nexus.register("gotocampos", {"gotcp"}, "gotocampos", "", "Instantly teleport
 end)
 
 -- ============================================================
--- TPONEAT (teleport near a player without touching them)
+-- TPONEAT (teleport next to a player, not on them)
 -- ============================================================
 _G.Nexus.register("tponeat", {"tpnextto"}, "tponeat <player> [distance]", "<player> [distance]", "Teleport next to a player at a distance", function(target, args)
     if not target then notify("TpOneAt", "Provide a target.") return end
@@ -6027,11 +6161,27 @@ _G.Nexus.register("tponeat", {"tpnextto"}, "tponeat <player> [distance]", "<play
 end)
 
 -- ============================================================
--- FLY V2 (camera-relative better fly)
+-- FLY V2 (fixed cleanup)
 -- ============================================================
 local fly2Conn = nil
 local fly2BodyVel = nil
 local fly2Speed = 100
+
+local function stopFly2()
+    if fly2Conn then
+        fly2Conn:Disconnect()
+        fly2Conn = nil
+    end
+    if fly2BodyVel then
+        fly2BodyVel:Destroy()
+        fly2BodyVel = nil
+    end
+    local char = getChar()
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
 
 _G.Nexus.register("fly2", {"flyv2"}, "fly2 [speed]", "[speed]", "Fly v2 (Camera-relative, no gyro)", function(target, args)
     local speed = tonumber(args[1]) or tonumber(target)
@@ -6058,12 +6208,12 @@ _G.Nexus.register("fly2", {"flyv2"}, "fly2 [speed]", "[speed]", "Fly v2 (Camera-
         local move = Vector3.new(0, 0, 0)
         local cf = Camera.CFrame
 
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-        if game:GetService("UserInputService"):IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
 
         if move.Magnitude > 0 then
             fly2BodyVel.Velocity = move.Unit * fly2Speed
@@ -6075,45 +6225,48 @@ _G.Nexus.register("fly2", {"flyv2"}, "fly2 [speed]", "[speed]", "Fly v2 (Camera-
 end)
 
 _G.Nexus.register("unfly2", {"unflyv2"}, "unfly2", "", "Stop fly v2", function()
-    if fly2Conn then fly2Conn:Disconnect() fly2Conn = nil end
-    if fly2BodyVel then fly2BodyVel:Destroy() fly2BodyVel = nil end
-    local char = getChar()
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then hum.PlatformStand = false end
-    end
+    stopFly2()
     notify("Fly2", "Disabled.")
 end)
 
 -- ============================================================
--- THRU (move forward by distance ignoring walls - gentle version)
+-- THRU (noclip forward, always restores collision)
 -- ============================================================
 _G.Nexus.register("thru", {}, "thru <distance>", "<distance>", "Move forward ignoring collisions", function(target, args)
     local n = tonumber(args[1]) or tonumber(target) or 5
     local hrp = getHRP()
-    if not hrp then return end
-    local noclipBefore = true
     local char = getChar()
+    if not hrp or not char then return end
+
+    local noCollideParts = {}
     for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
+            noCollideParts[part] = part.CanCollide
             part.CanCollide = false
         end
     end
+
     hrp.CFrame = hrp.CFrame + hrp.CFrame.LookVector * n
+
     task.wait(0.1)
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-            part.CanCollide = true
-        end
+
+    for part, was in pairs(noCollideParts) do
+        pcall(function()
+            if part and part.Parent then
+                part.CanCollide = was
+            end
+        end)
     end
+
     notify("Thru", "Moved " .. n .. " studs forward.")
 end)
 
-print("[Nexus] Batch 5 loaded. Movement II ready.")
+print("[Nexus] Batch 5 loaded. Movement II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 6: ESP VARIANTS
--- espteam, espenemies, chamsteam, chamsenemies, locate,
--- unlocate, esplocator, unesplocator, itemesp, unitemesp
+-- NEXUS - BATCH 6: ESP VARIANTS (FIXED)
+-- espteam, unespteam, espenemies, unespenemies, chamsteam,
+-- chamsenemies, locate, unlocate, esplocator, unesplocator,
+-- itemesp, unitemesp
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -6124,15 +6277,36 @@ local function notify(title, text)
     if _G.Nexus.notify then _G.Nexus.notify(title, text) end
 end
 
--- Storage for the different ESP types
+-- All ESP store in one table now
 local espStore = {
     team = {},
     enemies = {},
     locator = {},
-    items = {},
 }
 
--- Helper: build a highlight + billboard for a player
+-- Single heartbeat loop that only exists once
+local espLoopConn = nil
+
+local function startEspLoop()
+    if espLoopConn then return end
+    espLoopConn = RunService.RenderStepped:Connect(function()
+        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not myHRP then return end
+        for _, store in pairs(espStore) do
+            for plr, data in pairs(store) do
+                if data.billboard and plr.Character then
+                    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+                    local dl = data.billboard:FindFirstChild("DistLabel")
+                    if hrp and dl then
+                        dl.Text = math.floor((hrp.Position - myHRP.Position).Magnitude) .. " studs"
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Helper: build highlight + billboard for a player
 local function buildHighlight(player, color, showName, showDist, store)
     if store[player] then return end
     local char = player.Character
@@ -6188,6 +6362,7 @@ local function buildHighlight(player, color, showName, showDist, store)
     end
 
     store[player] = { highlight = highlight, billboard = billboard }
+    startEspLoop()
 end
 
 local function removeStore(store)
@@ -6197,23 +6372,6 @@ local function removeStore(store)
     end
     for plr in pairs(store) do store[plr] = nil end
 end
-
--- Distance updater
-RunService.RenderStepped:Connect(function()
-    local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return end
-    for _, store in pairs(espStore) do
-        for plr, data in pairs(store) do
-            if data.billboard and plr.Character then
-                local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
-                local dl = data.billboard:FindFirstChild("DistLabel")
-                if hrp and dl then
-                    dl.Text = math.floor((hrp.Position - myHRP.Position).Magnitude) .. " studs"
-                end
-            end
-        end
-    end
-end)
 
 -- ============================================================
 -- ESP TEAM
@@ -6252,7 +6410,7 @@ _G.Nexus.register("unespenemies", {"unenemyesp"}, "unespenemies", "", "Disable e
 end)
 
 -- ============================================================
--- CHAMS TEAM / ENEMIES (same but without names)
+-- CHAMS TEAM / ENEMIES
 -- ============================================================
 _G.Nexus.register("chamsteam", {"teamchams"}, "chamsteam", "", "Chams for teammates only", function()
     removeStore(espStore.team)
@@ -6275,10 +6433,8 @@ _G.Nexus.register("chamsenemies", {"enemychams"}, "chamsenemies", "", "Chams for
 end)
 
 -- ============================================================
--- LOCATE (track a specific list of players)
+-- LOCATE
 -- ============================================================
-local located = {}
-
 _G.Nexus.register("locate", {}, "locate <player1> <player2> ...", "<player...>", "Track specific players with ESP", function(target, args)
     local list = {}
     if target then table.insert(list, target) end
@@ -6289,36 +6445,19 @@ _G.Nexus.register("locate", {}, "locate <player1> <player2> ...", "<player...>",
     for _, name in ipairs(list) do
         local plr = _G.Nexus.findPlayer and _G.Nexus.findPlayer(name)
         if plr then
-            if not located[plr] then
-                local char = plr.Character
-                if char then
-                    local hl = Instance.new("Highlight")
-                    hl.Name = "NexusLocate"
-                    hl.Adornee = char
-                    hl.FillColor = Color3.fromRGB(255, 220, 60)
-                    hl.FillTransparency = 0.5
-                    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                    hl.OutlineTransparency = 0
-                    hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                    hl.Parent = char
-                    located[plr] = hl
-                end
-            end
+            buildHighlight(plr, Color3.fromRGB(255, 220, 60), true, true, espStore.locator)
         end
     end
     notify("Locate", "Tracking " .. #list .. " players.")
 end)
 
 _G.Nexus.register("unlocate", {}, "unlocate", "", "Stop tracking located players", function()
-    for plr, hl in pairs(located) do
-        if hl then hl:Destroy() end
-    end
-    located = {}
+    removeStore(espStore.locator)
     notify("Locate", "Stopped.")
 end)
 
 -- ============================================================
--- ESP LOCATOR (highlight everyone and then let you narrow down)
+-- ESP LOCATOR
 -- ============================================================
 _G.Nexus.register("esplocator", {"locator"}, "esplocator", "", "ESP all players with the locator color", function()
     removeStore(espStore.locator)
@@ -6336,7 +6475,7 @@ _G.Nexus.register("unesplocator", {"unlocator"}, "unesplocator", "", "Disable lo
 end)
 
 -- ============================================================
--- ITEM ESP (highlight dropped tools in workspace)
+-- ITEM ESP
 -- ============================================================
 local itemHighlights = {}
 
@@ -6366,9 +6505,9 @@ _G.Nexus.register("unitemesp", {"untoolesp"}, "unitemesp", "", "Disable item ESP
     notify("ItemEsp", "Disabled.")
 end)
 
-print("[Nexus] Batch 6 loaded. ESP Variants ready.")
+print("[Nexus] Batch 6 loaded. ESP Variants (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 7: NPC II
+-- NEXUS - BATCH 7: NPC II (FIXED)
 -- npcesp, npcchams, unnpcesp, clickkillnpc, unclickkillnpc,
 -- clickvoidnpc, unclickvoidnpc, voidnpcs, actnpc, unactnpc
 -- ============================================================
@@ -6407,119 +6546,113 @@ local function getNPCs()
 end
 
 -- ============================================================
--- NPC ESP
+-- NPC ESP / CHAMS (single store, no leaks)
 -- ============================================================
 local npcEspStore = {}
 
-_G.Nexus.register("npcesp", {"espnpc"}, "npcesp", "", "ESP every NPC", function()
+local function clearNpcEsp()
+    for npc, hl in pairs(npcEspStore) do
+        pcall(function()
+            if hl and hl.Parent then hl:Destroy() end
+        end)
+    end
+    npcEspStore = {}
+end
+
+local function buildNpcEsp(color)
     for _, npc in ipairs(getNPCs()) do
         if not npcEspStore[npc] then
             local hl = Instance.new("Highlight")
             hl.Name = "NexusNpcEsp"
             hl.Adornee = npc
-            hl.FillColor = Color3.fromRGB(255, 180, 80)
+            hl.FillColor = color
             hl.FillTransparency = 0.6
             hl.OutlineColor = Color3.fromRGB(255, 255, 255)
             hl.OutlineTransparency = 0
             hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
             hl.Parent = npc
             npcEspStore[npc] = hl
+        else
+            npcEspStore[npc].FillColor = color
         end
     end
+end
+
+_G.Nexus.register("npcesp", {"espnpc"}, "npcesp", "", "ESP every NPC", function()
+    clearNpcEsp()
+    buildNpcEsp(Color3.fromRGB(255, 180, 80))
     notify("NpcEsp", "Enabled.")
 end)
 
--- ============================================================
--- NPC CHAMS (same effect but no FillTransparency on click detection - same)
--- ============================================================
 _G.Nexus.register("npcchams", {"chamsnpc"}, "npcchams", "", "Chams for every NPC", function()
-    for _, npc in ipairs(getNPCs()) do
-        if not npcEspStore[npc] then
-            local hl = Instance.new("Highlight")
-            hl.Name = "NexusNpcEsp"
-            hl.Adornee = npc
-            hl.FillColor = Color3.fromRGB(255, 80, 80)
-            hl.FillTransparency = 0.5
-            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-            hl.OutlineTransparency = 0
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Parent = npc
-            npcEspStore[npc] = hl
-        end
-    end
+    clearNpcEsp()
+    buildNpcEsp(Color3.fromRGB(255, 80, 80))
     notify("NpcChams", "Enabled.")
 end)
 
-_G.Nexus.register("unnpcesp", {"unnpcchams"}, "unnpcesp", "", "Disable NPC ESP / chams", function()
-    for npc, hl in pairs(npcEspStore) do
-        if hl then hl:Destroy() end
-    end
-    npcEspStore = {}
+_G.Nexus.register("unnpcesp", {"unnpcchams", "unespnpc"}, "unnpcesp", "", "Disable NPC ESP / chams", function()
+    clearNpcEsp()
     notify("NpcEsp", "Disabled.")
 end)
 
 -- ============================================================
--- CLICK KILL NPC (click on an NPC to kill it)
+-- CLICK KILL NPC / CLICK VOID NPC (shared connection)
 -- ============================================================
-local clickKillNpcConn
+local clickAction = nil
+local clickConn = nil
 
-_G.Nexus.register("clickkillnpc", {"cknpc"}, "clickkillnpc", "", "Click an NPC to kill it", function()
-    if clickKillNpcConn then return end
-    clickKillNpcConn = UserInputService.InputBegan:Connect(function(input, gpe)
+local function stopClickAction()
+    if clickConn then
+        clickConn:Disconnect()
+        clickConn = nil
+    end
+    clickAction = nil
+end
+
+local function startClickAction(mode)
+    if clickAction == mode and clickConn then return end
+    stopClickAction()
+    clickAction = mode
+    clickConn = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local mouse = LocalPlayer:GetMouse()
-            local target = mouse.Target
-            if target then
-                local model = target:FindFirstAncestorOfClass("Model")
-                if model and isNPC(model) then
-                    local hum = model:FindFirstChildOfClass("Humanoid")
-                    if hum then hum.Health = 0 end
-                end
-            end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+        local mouse = LocalPlayer:GetMouse()
+        local target = mouse.Target
+        if not target then return end
+        local model = target:FindFirstAncestorOfClass("Model")
+        if not model or not isNPC(model) then return end
+        if mode == "kill" then
+            local hum = model:FindFirstChildOfClass("Humanoid")
+            if hum then hum.Health = 0 end
+        elseif mode == "void" then
+            local hrp = model:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.CFrame = CFrame.new(0, -100000, 0) end
         end
     end)
+end
+
+_G.Nexus.register("clickkillnpc", {"cknpc"}, "clickkillnpc", "", "Click an NPC to kill it", function()
+    startClickAction("kill")
     notify("ClickKillNpc", "Enabled.")
 end)
 
 _G.Nexus.register("unclickkillnpc", {"uncknpc"}, "unclickkillnpc", "", "Disable click kill NPC", function()
-    if clickKillNpcConn then clickKillNpcConn:Disconnect() clickKillNpcConn = nil end
+    if clickAction == "kill" then stopClickAction() end
     notify("ClickKillNpc", "Disabled.")
 end)
 
--- ============================================================
--- CLICK VOID NPC (click an NPC to send it to the void)
--- ============================================================
-local clickVoidNpcConn
-
 _G.Nexus.register("clickvoidnpc", {"cvnpc"}, "clickvoidnpc", "", "Click an NPC to send it into the void", function()
-    if clickVoidNpcConn then return end
-    clickVoidNpcConn = UserInputService.InputBegan:Connect(function(input, gpe)
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            local mouse = LocalPlayer:GetMouse()
-            local target = mouse.Target
-            if target then
-                local model = target:FindFirstAncestorOfClass("Model")
-                if model and isNPC(model) then
-                    local hrp = model:FindFirstChild("HumanoidRootPart")
-                    if hrp then
-                        hrp.CFrame = CFrame.new(0, -100000, 0)
-                    end
-                end
-            end
-        end
-    end)
+    startClickAction("void")
     notify("ClickVoidNpc", "Enabled.")
 end)
 
 _G.Nexus.register("unclickvoidnpc", {"uncvnpc"}, "unclickvoidnpc", "", "Disable click void NPC", function()
-    if clickVoidNpcConn then clickVoidNpcConn:Disconnect() clickVoidNpcConn = nil end
+    if clickAction == "void" then stopClickAction() end
     notify("ClickVoidNpc", "Disabled.")
 end)
 
 -- ============================================================
--- VOID NPCS (send every NPC to the void - advanced version)
+-- VOID NPCS
 -- ============================================================
 _G.Nexus.register("voidnpcs", {"vnpcs"}, "voidnpcs", "", "Send every NPC to the void", function()
     local count = 0
@@ -6534,12 +6667,12 @@ _G.Nexus.register("voidnpcs", {"vnpcs"}, "voidnpcs", "", "Send every NPC to the 
 end)
 
 -- ============================================================
--- ACT NPC (act like an NPC yourself - freeze animations)
+-- ACT NPC (freezes movement AND animations)
 -- ============================================================
-local actNpcConn
+local actNpcConn = nil
 
 _G.Nexus.register("actnpc", {}, "actnpc", "", "Act like an NPC (freeze animations, stand still)", function()
-    if actNpcConn then return end
+    if actNpcConn then actNpcConn:Disconnect() end
     actNpcConn = RunService.Heartbeat:Connect(function()
         local char = getChar()
         if not char then return end
@@ -6548,6 +6681,13 @@ _G.Nexus.register("actnpc", {}, "actnpc", "", "Act like an NPC (freeze animation
             hum.WalkSpeed = 0
             hum.JumpPower = 0
             hum.UseJumpPower = true
+        end
+        -- Freeze all playing animation tracks
+        local animator = char:FindFirstChildOfClass("Animator")
+        if animator then
+            for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                track:Stop(0)
+            end
         end
     end)
     notify("ActNpc", "Enabled.")
@@ -6566,15 +6706,14 @@ _G.Nexus.register("unactnpc", {"stopnpc"}, "unactnpc", "", "Stop acting like an 
     notify("ActNpc", "Disabled.")
 end)
 
-print("[Nexus] Batch 7 loaded. NPC II ready.")
+print("[Nexus] Batch 7 loaded. NPC II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 8: REMOTES II
+-- NEXUS - BATCH 8: REMOTES II (FIXED)
 -- fireremotefind, autofireremote, unautofireremote,
 -- blockremote, unblockremote, serverremotespy, unserverremotespy
 -- ============================================================
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 local function notify(title, text)
@@ -6582,7 +6721,7 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- FIREREMOTEFIND (fire only matching remotes)
+-- FIREREMOTEFIND
 -- ============================================================
 _G.Nexus.register("fireremotefind", {"fremotefind"}, "fireremotefind <name>", "<name>", "Fire every remote whose name contains <name>", function(target)
     if not target then notify("FireremoteFind", "Provide a name.") return end
@@ -6600,9 +6739,10 @@ _G.Nexus.register("fireremotefind", {"fremotefind"}, "fireremotefind <name>", "<
 end)
 
 -- ============================================================
--- AUTOFIREREMOTE (keep firing a remote on interval)
+-- AUTOFIREREMOTE (loop with proper flag)
 -- ============================================================
-local autoFireConn
+local autoFireActive = false
+local autoFireThread = nil
 
 _G.Nexus.register("autofireremote", {"afr"}, "autofireremote <interval> <name>", "<interval> <name>", "Automatically fire a remote on interval", function(target, args)
     local interval = tonumber(args[1]) or tonumber(target)
@@ -6613,12 +6753,20 @@ _G.Nexus.register("autofireremote", {"afr"}, "autofireremote <interval> <name>",
         return
     end
 
-    if autoFireConn then autoFireConn:Disconnect() end
+    autoFireActive = false
+    if autoFireThread then
+        pcall(function() task.cancel(autoFireThread) end)
+        autoFireThread = nil
+    end
+    task.wait(0.05)
 
+    autoFireActive = true
     local lower = name:lower()
-    autoFireConn = task.spawn(function()
-        while true do
+
+    autoFireThread = task.spawn(function()
+        while autoFireActive do
             for _, obj in ipairs(game:GetDescendants()) do
+                if not autoFireActive then break end
                 if obj:IsA("RemoteEvent") and obj.Name:lower():find(lower, 1, true) then
                     pcall(function() obj:FireServer() end)
                 end
@@ -6630,44 +6778,51 @@ _G.Nexus.register("autofireremote", {"afr"}, "autofireremote <interval> <name>",
 end)
 
 _G.Nexus.register("unautofireremote", {"unafr"}, "unautofireremote", "", "Stop auto firing", function()
-    if autoFireConn then
-        pcall(function() task.cancel(autoFireConn) end)
-        autoFireConn = nil
+    autoFireActive = false
+    if autoFireThread then
+        pcall(function() task.cancel(autoFireThread) end)
+        autoFireThread = nil
     end
     notify("AutoFireRemote", "Stopped.")
 end)
 
 -- ============================================================
--- BLOCKREMOTE (block specific remotes from reaching the server)
+-- BLOCKREMOTE (installs hook once)
 -- ============================================================
 local blockedRemotes = {}
+local blockHookInstalled = false
 
-_G.Nexus.register("blockremote", {"br"}, "blockremote <name>", "<name>", "Block a remote from sending to the server", function(target)
-    if not target then notify("BlockRemote", "Provide a name.") return end
-    local lower = target:lower()
+local function installBlockHook()
+    if blockHookInstalled then return end
+    if not getrawmetatable or not setreadonly or not newcclosure then
+        notify("BlockRemote", "Executor does not support hooking.")
+        return
+    end
 
-    local ok = pcall(function()
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if method == "FireServer" and self:IsA("RemoteEvent") then
-                if self.Name:lower():find(lower, 1, true) then
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if method == "FireServer" and typeof(self) == "Instance" and self:IsA("RemoteEvent") then
+            local n = self.Name:lower()
+            for blocked in pairs(blockedRemotes) do
+                if n:find(blocked, 1, true) then
                     return
                 end
             end
-            return oldNamecall(self, ...)
-        end)
-        setreadonly(mt, true)
+        end
+        return oldNamecall(self, ...)
     end)
+    setreadonly(mt, true)
+    blockHookInstalled = true
+end
 
-    if ok then
-        blockedRemotes[lower] = true
-        notify("BlockRemote", "Blocked remotes matching " .. target)
-    else
-        notify("BlockRemote", "Not supported.")
-    end
+_G.Nexus.register("blockremote", {"br"}, "blockremote <name>", "<name>", "Block a remote from sending to the server", function(target)
+    if not target then notify("BlockRemote", "Provide a name.") return end
+    installBlockHook()
+    blockedRemotes[target:lower()] = true
+    notify("BlockRemote", "Blocked remotes matching " .. target)
 end)
 
 _G.Nexus.register("unblockremote", {"ubr"}, "unblockremote [name]", "[name]", "Unblock a remote or all", function(target)
@@ -6681,18 +6836,21 @@ _G.Nexus.register("unblockremote", {"ubr"}, "unblockremote [name]", "[name]", "U
 end)
 
 -- ============================================================
--- SERVERREMOTESPY (log remotes coming from the server)
+-- SERVERREMOTESPY (filters DescendantAdded properly)
 -- ============================================================
-local serverRemoteSpyGui
-local serverRemoteSpyConn
+local serverRemoteSpyGui = nil
+local serverRemoteSpyConn = nil
+local spyEntries = {}
 
 local function buildSpyGui()
     if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() end
+    spyEntries = {}
 
+    local CoreGui = game:GetService("CoreGui")
     local gui = Instance.new("ScreenGui")
     gui.Name = "NexusServerRemoteSpy"
     gui.ResetOnSpawn = false
-    gui.Parent = game:GetService("CoreGui")
+    gui.Parent = CoreGui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 500, 0, 400)
@@ -6760,49 +6918,61 @@ local function buildSpyGui()
     return scroll
 end
 
+local function addSpyEntry(scroll, text)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, 0, 0, 22)
+    lbl.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
+    lbl.BorderSizePixel = 0
+    lbl.Text = "  " .. text
+    lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
+    lbl.Font = Enum.Font.Code
+    lbl.TextSize = 11
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = scroll
+
+    local lc = Instance.new("UICorner")
+    lc.CornerRadius = UDim.new(0, 4)
+    lc.Parent = lbl
+
+    table.insert(spyEntries, lbl)
+end
+
 _G.Nexus.register("serverremotespy", {"srs", "sremotespy"}, "serverremotespy", "", "Log all remote events received from the server", function()
     local scroll = buildSpyGui()
 
     if serverRemoteSpyConn then
         serverRemoteSpyConn:Disconnect()
+        serverRemoteSpyConn = nil
+    end
+
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("RemoteEvent") then
+            addSpyEntry(scroll, obj:GetFullName())
+        end
     end
 
     serverRemoteSpyConn = game.DescendantAdded:Connect(function(obj)
         if obj:IsA("RemoteEvent") then
-            -- Some games fire named remotes; we cannot fully hook them without hookfunction
-            -- But we can log them being added and prefixed
-            local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, 0, 0, 22)
-            lbl.BackgroundColor3 = Color3.fromRGB(24, 24, 29)
-            lbl.BorderSizePixel = 0
-            lbl.Text = "  " .. obj:GetFullName()
-            lbl.TextColor3 = Color3.fromRGB(200, 200, 220)
-            lbl.Font = Enum.Font.Code
-            lbl.TextSize = 11
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.Parent = scroll
-
-            local lc = Instance.new("UICorner")
-            lc.CornerRadius = UDim.new(0, 4)
-            lc.Parent = lbl
+            addSpyEntry(scroll, obj:GetFullName())
         end
     end)
 
-    notify("ServerRemoteSpy", "Enabled. UI opened.")
+    notify("ServerRemoteSpy", "Enabled.")
 end)
 
 _G.Nexus.register("unserverremotespy", {"unsrs"}, "unserverremotespy", "", "Stop server remote spy", function()
     if serverRemoteSpyConn then serverRemoteSpyConn:Disconnect() serverRemoteSpyConn = nil end
     if serverRemoteSpyGui then serverRemoteSpyGui:Destroy() serverRemoteSpyGui = nil end
+    spyEntries = {}
     notify("ServerRemoteSpy", "Disabled.")
 end)
 
-print("[Nexus] Batch 8 loaded. Remotes II ready.")
+print("[Nexus] Batch 8 loaded. Remotes II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 9: TOOL II
--- droptool, droptools, toolinvisible, preventtools,
--- unpreventtools, loopdroptools, unloopdroptools, copytools,
--- savetools, loadtools
+-- NEXUS - BATCH 9: TOOL II (FIXED)
+-- droptool, droptools, loopdroptools, unloopdroptools,
+-- toolinvisible, untoolinvisible, preventtools, unpreventtools,
+-- copytools, savetools, loadtools, notools, mybackpack, givetool
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -6820,7 +6990,7 @@ local function getBackpack()
 end
 
 -- ============================================================
--- DROPTOOL (single)
+-- DROPTOOL / DROPTOOLS
 -- ============================================================
 _G.Nexus.register("droptool", {"dtool"}, "droptool", "", "Drop a random equipped tool", function()
     local char = getChar()
@@ -6835,30 +7005,34 @@ _G.Nexus.register("droptool", {"dtool"}, "droptool", "", "Drop a random equipped
     notify("DropTool", "No equipped tools.")
 end)
 
--- ============================================================
--- DROPTOOLS (all equipped)
--- ============================================================
 _G.Nexus.register("droptools", {"dropalltools"}, "droptools", "", "Drop every equipped tool", function()
     local char = getChar()
     if not char then return end
+    local count = 0
     for _, obj in ipairs(char:GetChildren()) do
         if obj:IsA("Tool") then
             obj.Parent = Workspace
+            count = count + 1
         end
     end
-    notify("DropTools", "Dropped all equipped tools.")
+    notify("DropTools", "Dropped " .. count .. " tools.")
 end)
 
 -- ============================================================
--- LOOP DROP TOOLS
+-- LOOP DROP TOOLS (proper flag, no thread spam)
 -- ============================================================
-local loopDropToolsActive = false
+local loopDropActive = false
+local loopDropThread = nil
 
 _G.Nexus.register("loopdroptools", {"ldtools"}, "loopdroptools", "", "Keep dropping your tools", function()
-    if loopDropToolsActive then return end
-    loopDropToolsActive = true
-    task.spawn(function()
-        while loopDropToolsActive do
+    if loopDropActive then
+        notify("LoopDropTools", "Already running.")
+        return
+    end
+    loopDropActive = true
+
+    loopDropThread = task.spawn(function()
+        while loopDropActive do
             local char = getChar()
             if char then
                 for _, obj in ipairs(char:GetChildren()) do
@@ -6874,14 +7048,18 @@ _G.Nexus.register("loopdroptools", {"ldtools"}, "loopdroptools", "", "Keep dropp
 end)
 
 _G.Nexus.register("unloopdroptools", {"unldtools"}, "unloopdroptools", "", "Stop loop dropping tools", function()
-    loopDropToolsActive = false
+    loopDropActive = false
+    if loopDropThread then
+        pcall(function() task.cancel(loopDropThread) end)
+        loopDropThread = nil
+    end
     notify("LoopDropTools", "Disabled.")
 end)
 
 -- ============================================================
--- TOOL INVISIBLE (be invisible while still using tools)
+-- TOOL INVISIBLE (safe version, only touches limbs and decals)
 -- ============================================================
-local toolInvisConn
+local toolInvisConn = nil
 
 _G.Nexus.register("toolinvisible", {"tinvis"}, "toolinvisible", "", "Become invisible while keeping your tools usable", function()
     if toolInvisConn then return end
@@ -6889,7 +7067,7 @@ _G.Nexus.register("toolinvisible", {"tinvis"}, "toolinvisible", "", "Become invi
         local char = getChar()
         if not char then return end
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" and part.Name ~= "Head" then
                 part.LocalTransparencyModifier = 1
             end
             if part:IsA("Decal") then
@@ -6917,32 +7095,58 @@ _G.Nexus.register("untoolinvisible", {"untinvis"}, "untoolinvisible", "", "Stop 
 end)
 
 -- ============================================================
--- PREVENT TOOLS (block equipping)
+-- PREVENT TOOLS (blocks current and future)
 -- ============================================================
-local preventToolsConn
+local preventToolsConn = nil
+local preventLoop = nil
 
 _G.Nexus.register("preventtools", {"noequip"}, "preventtools", "", "Prevent any tool from being equipped", function()
-    if preventToolsConn then return end
+    if preventToolsConn then
+        notify("PreventTools", "Already enabled.")
+        return
+    end
     local char = getChar()
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
+
     preventToolsConn = hum.ChildAdded:Connect(function(obj)
         if obj:IsA("Tool") then
             task.wait(0.01)
             hum:UnequipTools()
         end
     end)
+
+    -- Force all currently equipped tools to unequip right away
+    hum:UnequipTools()
+
+    -- And run a loop that constantly keeps it unequipped
+    local active = true
+    preventLoop = task.spawn(function()
+        while active do
+            local c = getChar()
+            if c then
+                local h = c:FindFirstChildOfClass("Humanoid")
+                if h then h:UnequipTools() end
+            end
+            task.wait(0.2)
+        end
+    end)
+
     notify("PreventTools", "Enabled.")
 end)
 
 _G.Nexus.register("unpreventtools", {"unnoequip"}, "unpreventtools", "", "Allow tools again", function()
     if preventToolsConn then preventToolsConn:Disconnect() preventToolsConn = nil end
+    if preventLoop then
+        pcall(function() task.cancel(preventLoop) end)
+        preventLoop = nil
+    end
     notify("PreventTools", "Disabled.")
 end)
 
 -- ============================================================
--- COPY TOOLS (copy from another player)
+-- COPY TOOLS
 -- ============================================================
 _G.Nexus.register("copytools", {"ctools"}, "copytools <player>", "<player>", "Copy all of another player's tools", function(target)
     if not target then notify("CopyTools", "Provide a target.") return end
@@ -6999,7 +7203,7 @@ _G.Nexus.register("loadtools", {"ltools"}, "loadtools", "", "Restore your saved 
 end)
 
 -- ============================================================
--- NO TOOLS (delete every tool you own)
+-- NO TOOLS
 -- ============================================================
 _G.Nexus.register("notools", {"removetools"}, "notools", "", "Remove every tool from your character", function()
     local char = getChar()
@@ -7017,17 +7221,51 @@ _G.Nexus.register("notools", {"removetools"}, "notools", "", "Remove every tool 
     notify("NoTools", "All tools removed.")
 end)
 
-print("[Nexus] Batch 9 loaded. Tool II ready.")
 -- ============================================================
--- NEXUS - BATCH 10: FLING II
--- flyfling, unflyfling, walkfling, unwalkfling,
--- touchfling, untouchfling, cartornado, uncartornado,
--- blackholefollow, noblackholefollow, tpua
+-- BACKPACK VIEWER
+-- ============================================================
+_G.Nexus.register("mybackpack", {"backpack"}, "mybackpack", "", "List every tool in your backpack", function()
+    local backpack = getBackpack()
+    if not backpack then return end
+    local names = {}
+    for _, obj in ipairs(backpack:GetChildren()) do
+        if obj:IsA("Tool") then table.insert(names, obj.Name) end
+    end
+    notify("Backpack", #names .. " tools: " .. table.concat(names, ", "))
+end)
+
+-- ============================================================
+-- GIVE TOOL
+-- ============================================================
+_G.Nexus.register("givetool", {"gtool", "get"}, "givetool <name>", "<name>", "Find a tool by name anywhere and give it to yourself", function(target)
+    if not target then notify("GiveTool", "Provide a tool name.") return end
+    local backpack = getBackpack()
+    if not backpack then return end
+
+    for _, obj in ipairs(game:GetDescendants()) do
+        if obj:IsA("Tool") and obj.Name:lower():find(target:lower(), 1, true) then
+            local clone = obj:Clone()
+            clone.Parent = backpack
+            notify("GiveTool", "Gave " .. clone.Name)
+            return
+        end
+    end
+    notify("GiveTool", "Tool not found: " .. target)
+end)
+
+print("[Nexus] Batch 9 loaded. Tool II (fixed) ready.")
+-- ============================================================
+-- NEXUS - BATCH 10: FLING II (FIXED)
+-- flyfling, unflyfling, walkfling, unwalkfling, touchfling,
+-- untouchfling, cartornado, uncartornado, blackholefollow,
+-- noblackholefollow, tpua
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 local function notify(title, text)
     if _G.Nexus.notify then _G.Nexus.notify(title, text) end
@@ -7044,9 +7282,20 @@ local function findPlayer(q)
 end
 
 -- ============================================================
--- FLY FLING (fly and fling everything you touch)
+-- FLY FLING (fixed cleanup)
 -- ============================================================
-local flyFlingConn
+local flyFlingConn = nil
+local flyFlingBV = nil
+
+local function stopFlyFling()
+    if flyFlingConn then flyFlingConn:Disconnect() flyFlingConn = nil end
+    if flyFlingBV then flyFlingBV:Destroy() flyFlingBV = nil end
+    local char = getChar()
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.PlatformStand = false end
+    end
+end
 
 _G.Nexus.register("flyfling", {"ff"}, "flyfling [speed]", "[speed]", "Fly and fling anything you touch", function(target, args)
     local speed = tonumber(args[1]) or tonumber(target) or 200
@@ -7062,28 +7311,24 @@ _G.Nexus.register("flyfling", {"ff"}, "flyfling [speed]", "[speed]", "Fly and fl
     local hum = getChar():FindFirstChildOfClass("Humanoid")
     if hum then hum.PlatformStand = true end
 
-    local bv = Instance.new("BodyVelocity")
-    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    bv.Velocity = Vector3.new(0, 0, 0)
-    bv.P = 1e5
-    bv.Parent = hrp
-
-    local UIS = game:GetService("UserInputService")
-    local Camera = workspace.CurrentCamera
+    flyFlingBV = Instance.new("BodyVelocity")
+    flyFlingBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    flyFlingBV.Velocity = Vector3.new(0, 0, 0)
+    flyFlingBV.P = 1e5
+    flyFlingBV.Parent = hrp
 
     flyFlingConn = RunService.Heartbeat:Connect(function()
         if not hrp or not hrp.Parent then return end
         local move = Vector3.new(0, 0, 0)
         local cf = Camera.CFrame
-        if UIS:IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
-        if UIS:IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
-        if UIS:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
-        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
-        bv.Velocity = move.Magnitude > 0 and move.Unit * speed or Vector3.new(0, 0, 0)
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then move = move + cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then move = move - cf.LookVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then move = move - cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then move = move + cf.RightVector end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then move = move + Vector3.new(0, 1, 0) end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then move = move - Vector3.new(0, 1, 0) end
+        flyFlingBV.Velocity = move.Magnitude > 0 and move.Unit * speed or Vector3.new(0, 0, 0)
 
-        -- Fling anyone close
         for _, plr in ipairs(Players:GetPlayers()) do
             if plr ~= LocalPlayer and plr.Character then
                 local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
@@ -7097,22 +7342,14 @@ _G.Nexus.register("flyfling", {"ff"}, "flyfling [speed]", "[speed]", "Fly and fl
 end)
 
 _G.Nexus.register("unflyfling", {"unff"}, "unflyfling", "", "Stop fly fling", function()
-    if flyFlingConn then flyFlingConn:Disconnect() flyFlingConn = nil end
-    local hrp = getHRP()
-    if hrp then
-        for _, obj in ipairs(hrp:GetChildren()) do
-            if obj:IsA("BodyVelocity") then obj:Destroy() end
-        end
-    end
-    local hum = getChar() and getChar():FindFirstChildOfClass("Humanoid")
-    if hum then hum.PlatformStand = false end
+    stopFlyFling()
     notify("FlyFling", "Disabled.")
 end)
 
 -- ============================================================
--- WALK FLING (walk around and fling everyone you touch)
+-- WALK FLING (fixed cleanup)
 -- ============================================================
-local walkFlingConn
+local walkFlingConn = nil
 local WALKFLING_SPEED = 200
 
 _G.Nexus.register("walkfling", {"wfling", "wf"}, "walkfling [speed]", "[speed]", "Fling people just by walking into them", function(target, args)
@@ -7145,9 +7382,9 @@ _G.Nexus.register("unwalkfling", {"unwfling", "unwf"}, "unwalkfling", "", "Stop 
 end)
 
 -- ============================================================
--- TOUCH FLING (only fling when you touch them)
+-- TOUCH FLING (fixed cleanup)
 -- ============================================================
-local touchFlingConn
+local touchFlingConn = nil
 local TOUCHFLING_SPEED = 500
 
 _G.Nexus.register("touchfling", {"tfling", "tf"}, "touchfling [speed]", "[speed]", "Fling anyone your character touches", function(target, args)
@@ -7191,9 +7428,9 @@ _G.Nexus.register("untouchfling", {"untfling", "untf"}, "untouchfling", "", "Sto
 end)
 
 -- ============================================================
--- CARTORNADO (spins a car into a tornado - sit in a car first)
+-- CAR TORNADO (fixed spin on primary part only)
 -- ============================================================
-local carTornadoConn
+local carTornadoConn = nil
 
 _G.Nexus.register("cartornado", {"ctornado"}, "cartornado", "", "Spin the car you are sitting in into a tornado", function()
     if carTornadoConn then return end
@@ -7208,10 +7445,8 @@ _G.Nexus.register("cartornado", {"ctornado"}, "cartornado", "", "Spin the car yo
 
     carTornadoConn = RunService.Heartbeat:Connect(function()
         if not car or not car.Parent then return end
-        for _, part in ipairs(car:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.AssemblyAngularVelocity = Vector3.new(0, 200, 0)
-            end
+        if car.PrimaryPart then
+            car.PrimaryPart.AssemblyAngularVelocity = Vector3.new(0, 200, 0)
         end
     end)
     notify("CarTornado", "Spinning.")
@@ -7223,14 +7458,15 @@ _G.Nexus.register("uncartornado", {"unctornado"}, "uncartornado", "", "Stop the 
 end)
 
 -- ============================================================
--- BLACKHOLE FOLLOW (pull every unanchored part to you)
+-- BLACKHOLE FOLLOW
 -- ============================================================
 local blackholeFollowActive = false
+local blackholeFollowThread = nil
 
 _G.Nexus.register("blackholefollow", {"bhf"}, "blackholefollow", "", "Pull all unanchored parts to you with spin", function()
     if blackholeFollowActive then return end
     blackholeFollowActive = true
-    task.spawn(function()
+    blackholeFollowThread = task.spawn(function()
         while blackholeFollowActive do
             local hrp = getHRP()
             if hrp then
@@ -7254,34 +7490,67 @@ end)
 
 _G.Nexus.register("noblackholefollow", {"nobhf"}, "noblackholefollow", "", "Stop blackhole follow", function()
     blackholeFollowActive = false
+    if blackholeFollowThread then
+        pcall(function() task.cancel(blackholeFollowThread) end)
+        blackholeFollowThread = nil
+    end
     notify("BlackholeFollow", "Disabled.")
 end)
 
 -- ============================================================
--- TPUA (bring every unanchored part to a player)
+-- TPUA (teleport all unanchored parts to a player, threaded + delayed)
 -- ============================================================
+local tpuaActive = false
+local tpuaThread = nil
+
 _G.Nexus.register("tpua", {"bringua"}, "tpua <player>", "<player>", "Bring every unanchored part to a player", function(target)
     if not target then notify("Tpua", "Provide a target.") return end
     local plr = findPlayer(target)
     if not plr or not plr.Character then notify("Tpua", "Player not found.") return end
-    local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
-    if not tHRP then return end
 
-    local count = 0
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not obj.Anchored and not Players:GetPlayerFromCharacter(obj.Parent) then
-            obj.CFrame = tHRP.CFrame + Vector3.new(math.random(-5, 5), math.random(2, 8), math.random(-5, 5))
-            count = count + 1
-        end
+    if tpuaActive then
+        notify("Tpua", "Already running.")
+        return
     end
-    notify("Tpua", "Brought " .. count .. " parts to " .. plr.Name)
+
+    tpuaActive = true
+    tpuaThread = task.spawn(function()
+        while tpuaActive and plr.Character do
+            local tHRP = plr.Character:FindFirstChild("HumanoidRootPart")
+            if not tHRP then break end
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if not tpuaActive then break end
+                if obj:IsA("BasePart") and not obj.Anchored then
+                    if not Players:GetPlayerFromCharacter(obj.Parent) then
+                        pcall(function()
+                            obj.CFrame = tHRP.CFrame + Vector3.new(math.random(-5, 5), math.random(2, 8), math.random(-5, 5))
+                        end)
+                        task.wait(0.02)
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+        tpuaActive = false
+    end)
+    notify("Tpua", "Bringing parts to " .. plr.Name)
 end)
 
-print("[Nexus] Batch 10 loaded. Fling II ready.")
+_G.Nexus.register("untpua", {"unbringua"}, "untpua", "", "Stop tpua", function()
+    tpuaActive = false
+    if tpuaThread then
+        pcall(function() task.cancel(tpuaThread) end)
+        tpuaThread = nil
+    end
+    notify("Tpua", "Stopped.")
+end)
+
+print("[Nexus] Batch 10 loaded. Fling II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 11: MISC I
+-- NEXUS - BATCH 11: MISC I (FIXED)
 -- dex, olddex, synapsedex, rc7, moduleeditor, upvalueeditor,
--- decompiler, partname, gameinfo, jobid, getgenv
+-- decompiler, partname, unpartname, gameinfo, jobid, placeid,
+-- gameid, getgenv
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -7292,51 +7561,61 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- DEX EXPLORER (loader by Moon)
+-- Safe script loader
 -- ============================================================
-_G.Nexus.register("dex", {}, "dex", "", "Load the Dex explorer", function()
-    local url = "https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua"
+local function safeLoad(url, name)
+    if not url or url == "" then
+        notify(name, "No URL configured.")
+        return false
+    end
     local ok, err = pcall(function()
-        loadstring(game:HttpGet(url))()
+        local response = game:HttpGet(url)
+        if not response or response == "" then
+            error("Empty response from URL")
+        end
+        loadstring(response)()
     end)
     if ok then
-        notify("Dex", "Loaded.")
+        notify(name, "Loaded.")
+        return true
     else
-        notify("Dex", "Failed: " .. tostring(err))
+        notify(name, "Failed: " .. tostring(err))
+        return false
     end
+end
+
+-- ============================================================
+-- DEX EXPLORER (working URL)
+-- ============================================================
+_G.Nexus.register("dex", {}, "dex", "", "Load the Dex explorer", function()
+    safeLoad("https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua", "Dex")
 end)
 
 -- ============================================================
--- OLD DEX (lighter version)
+-- OLD DEX
 -- ============================================================
 _G.Nexus.register("olddex", {}, "olddex", "", "Load the old Dex explorer", function()
-    local url = "https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua"
-    pcall(function() loadstring(game:HttpGet(url))() end)
-    notify("OldDex", "Loaded (fallback).")
+    safeLoad("https://raw.githubusercontent.com/peyton2465/Dex/master/out.lua", "OldDex")
 end)
 
 -- ============================================================
 -- SYNAPSE DEX
 -- ============================================================
 _G.Nexus.register("synapsedex", {"sdex"}, "synapsedex", "", "Load Synapse's Dex explorer", function()
-    local url = "https://raw.githubusercontent.com/AhmadV99/SynapseX-Dex/master/out.lua"
-    local ok, err = pcall(function() loadstring(game:HttpGet(url))() end)
-    if ok then notify("SynapseDex", "Loaded.") else notify("SynapseDex", "Failed.") end
+    safeLoad("https://raw.githubusercontent.com/AhmadV99/SynapseX-Dex/master/out.lua", "SynapseDex")
 end)
 
 -- ============================================================
 -- RC7
 -- ============================================================
 _G.Nexus.register("rc7", {}, "rc7", "", "Load RC7 internal UI", function()
-    local url = "https://raw.githubusercontent.com/78n/RC7/main/rc7.lua"
-    local ok = pcall(function() loadstring(game:HttpGet(url))() end)
-    notify("RC7", ok and "Loaded." or "Failed.")
+    safeLoad("https://raw.githubusercontent.com/78n/RC7/main/rc7.lua", "RC7")
 end)
 
 -- ============================================================
--- MODULE EDITOR (simple table walker)
+-- MODULE EDITOR (prints list)
 -- ============================================================
-_G.Nexus.register("moduleeditor", {"mtable"}, "moduleeditor", "", "Open a ModuleScript picker with editable tables", function()
+_G.Nexus.register("moduleeditor", {"mtable"}, "moduleeditor", "", "Print every ModuleScript path", function()
     local modules = {}
     for _, obj in ipairs(game:GetDescendants()) do
         if obj:IsA("ModuleScript") then table.insert(modules, obj) end
@@ -7348,7 +7627,7 @@ _G.Nexus.register("moduleeditor", {"mtable"}, "moduleeditor", "", "Open a Module
 end)
 
 -- ============================================================
--- UPVALUE EDITOR (prints upvalues of a script)
+-- UPVALUE EDITOR (prints upvalues)
 -- ============================================================
 _G.Nexus.register("upvalueeditor", {"uveditor"}, "upvalueeditor", "", "Print the upvalues of every LocalScript", function()
     if not getupvalues or not getscriptclosure then
@@ -7373,7 +7652,7 @@ end)
 -- ============================================================
 -- DECOMPILER
 -- ============================================================
-_G.Nexus.register("decompiler", {}, "decompiler", "", "Print the bytecode of a LocalScript (executor-dependent)", function()
+_G.Nexus.register("decompiler", {}, "decompiler", "", "Print the bytecode size of every LocalScript", function()
     if not getscriptbytecode then
         notify("Decompiler", "Not supported by this executor.")
         return
@@ -7390,15 +7669,17 @@ _G.Nexus.register("decompiler", {}, "decompiler", "", "Print the bytecode of a L
 end)
 
 -- ============================================================
--- PART NAME (click to grab full path)
+-- PART NAME (global state, safe disconnect)
 -- ============================================================
-local partNameConn
-local partNameGui
+_G.Nexus.PartNameConn = _G.Nexus.PartNameConn or nil
 
 _G.Nexus.register("partname", {"partpath"}, "partname", "", "Click any part to copy its full path", function()
-    if partNameConn then return end
+    if _G.Nexus.PartNameConn then
+        notify("PartName", "Already enabled.")
+        return
+    end
     local UserInputService = game:GetService("UserInputService")
-    partNameConn = UserInputService.InputBegan:Connect(function(input, gpe)
+    _G.Nexus.PartNameConn = UserInputService.InputBegan:Connect(function(input, gpe)
         if gpe then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             local mouse = LocalPlayer:GetMouse()
@@ -7414,8 +7695,13 @@ _G.Nexus.register("partname", {"partpath"}, "partname", "", "Click any part to c
 end)
 
 _G.Nexus.register("unpartname", {"unpartpath"}, "unpartname", "", "Stop part name clicker", function()
-    if partNameConn then partNameConn:Disconnect() partNameConn = nil end
-    notify("PartName", "Disabled.")
+    if _G.Nexus.PartNameConn then
+        _G.Nexus.PartNameConn:Disconnect()
+        _G.Nexus.PartNameConn = nil
+        notify("PartName", "Disabled.")
+    else
+        notify("PartName", "Not running.")
+    end
 end)
 
 -- ============================================================
@@ -7426,7 +7712,7 @@ _G.Nexus.register("gameinfo", {"ginfo"}, "gameinfo", "", "Print game info to con
     print("[Nexus GameInfo] PlaceId: " .. game.PlaceId)
     print("[Nexus GameInfo] GameId: " .. game.GameId)
     print("[Nexus GameInfo] JobId: " .. game.JobId)
-    print("[Nexus GameInfo] PlaceName: " .. tostring(game.PlaceId))
+    print("[Nexus GameInfo] Creator: " .. tostring(game.CreatorId))
 end)
 
 -- ============================================================
@@ -7448,25 +7734,32 @@ _G.Nexus.register("gameid", {"gid"}, "gameid", "", "Copy the GameId", function()
 end)
 
 -- ============================================================
--- GETGENV
+-- GETGENV (limited to 100 entries)
 -- ============================================================
-_G.Nexus.register("getgenv", {"genv"}, "getgenv", "", "Print the executor's globals table", function()
+_G.Nexus.register("getgenv", {"genv"}, "getgenv", "", "Print the first 100 executor globals", function()
     if getgenv then
-        print("[Nexus getgenv]")
+        print("[Nexus getgenv] First 100 entries:")
+        local count = 0
         for k, v in pairs(getgenv()) do
+            count = count + 1
+            if count > 100 then
+                print("   ... and more (truncated)")
+                break
+            end
             print("  " .. tostring(k) .. " = " .. tostring(v))
         end
-        notify("getgenv", "Printed to console.")
+        notify("getgenv", "Printed " .. math.min(count, 100) .. " entries.")
     else
         notify("getgenv", "Not supported.")
     end
 end)
 
-print("[Nexus] Batch 11 loaded. Misc I ready.")
+print("[Nexus] Batch 11 loaded. Misc I (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 12: MISC II
--- minimap, animationplayer, speedometer, keystroke, notepad,
--- backpack, autoclicker, keyboard
+-- NEXUS - BATCH 12: MISC II (FIXED)
+-- speedometer, closespeedometer, keystroke, unkeystroke,
+-- notepad, unnotepad, autoclicker, unautoclicker,
+-- minimap, unminimap, animationplayer
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -7480,24 +7773,27 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- SPEEDOMETER
+-- SPEEDOMETER (connection stored, no leak)
 -- ============================================================
-local speedoGui
+_G.Nexus.SpeedoGui = _G.Nexus.SpeedoGui or nil
+_G.Nexus.SpeedoConn = _G.Nexus.SpeedoConn or nil
 
 _G.Nexus.register("speedometer", {"sps", "speedo"}, "speedometer", "", "Show a speedometer of your character", function()
-    if speedoGui then speedoGui:Destroy() end
+    if _G.Nexus.SpeedoGui then _G.Nexus.SpeedoGui:Destroy() end
+    if _G.Nexus.SpeedoConn then _G.Nexus.SpeedoConn:Disconnect() end
 
-    speedoGui = Instance.new("ScreenGui")
-    speedoGui.Name = "NexusSpeedometer"
-    speedoGui.ResetOnSpawn = false
-    speedoGui.Parent = CoreGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusSpeedometer"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    _G.Nexus.SpeedoGui = gui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 180, 0, 50)
     frame.Position = UDim2.new(0, 20, 0.5, 0)
     frame.BackgroundColor3 = Color3.fromRGB(17, 17, 20)
     frame.BorderSizePixel = 0
-    frame.Parent = speedoGui
+    frame.Parent = gui
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 10)
@@ -7519,41 +7815,45 @@ _G.Nexus.register("speedometer", {"sps", "speedo"}, "speedometer", "", "Show a s
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
 
-    local conn
-    conn = RunService.Heartbeat:Connect(function()
-        if not speedoGui or not speedoGui.Parent then conn:Disconnect() return end
+    _G.Nexus.SpeedoConn = RunService.Heartbeat:Connect(function()
+        if not gui or not gui.Parent then return end
         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
-            local speed = hrp.AssemblyLinearVelocity.Magnitude
-            label.Text = math.floor(speed) .. " studs/s"
+            label.Text = math.floor(hrp.AssemblyLinearVelocity.Magnitude) .. " studs/s"
         end
     end)
     notify("Speedometer", "Enabled.")
 end)
 
 _G.Nexus.register("closespeedometer", {"nosps", "unspeedo"}, "closespeedometer", "", "Close the speedometer", function()
-    if speedoGui then speedoGui:Destroy() speedoGui = nil end
+    if _G.Nexus.SpeedoGui then _G.Nexus.SpeedoGui:Destroy() _G.Nexus.SpeedoGui = nil end
+    if _G.Nexus.SpeedoConn then _G.Nexus.SpeedoConn:Disconnect() _G.Nexus.SpeedoConn = nil end
     notify("Speedometer", "Closed.")
 end)
 
 -- ============================================================
--- KEYSTROKE (shows the keys you are pressing)
+-- KEYSTROKE (installs one updater)
 -- ============================================================
-local keystrokeGui
-local keyLabels = {}
+_G.Nexus.KeystrokeGui = _G.Nexus.KeystrokeGui or nil
+_G.Nexus.KeystrokeConn = _G.Nexus.KeystrokeConn or nil
+_G.Nexus.KeyLabels = _G.Nexus.KeyLabels or {}
 
 local function buildKeystroke()
-    if keystrokeGui then keystrokeGui:Destroy() end
-    keystrokeGui = Instance.new("ScreenGui")
-    keystrokeGui.Name = "NexusKeystroke"
-    keystrokeGui.ResetOnSpawn = false
-    keystrokeGui.Parent = CoreGui
+    if _G.Nexus.KeystrokeGui then _G.Nexus.KeystrokeGui:Destroy() end
+    if _G.Nexus.KeystrokeConn then _G.Nexus.KeystrokeConn:Disconnect() end
+    _G.Nexus.KeyLabels = {}
+
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusKeystroke"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    _G.Nexus.KeystrokeGui = gui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 220, 0, 50)
     frame.Position = UDim2.new(0.5, -110, 1, -70)
     frame.BackgroundTransparency = 1
-    frame.Parent = keystrokeGui
+    frame.Parent = gui
 
     local layout = Instance.new("UIListLayout")
     layout.FillDirection = Enum.FillDirection.Horizontal
@@ -7577,23 +7877,17 @@ local function buildKeystroke()
         c.CornerRadius = UDim.new(0, 6)
         c.Parent = box
 
-        keyLabels[k] = box
+        _G.Nexus.KeyLabels[k] = box
     end
 end
 
 _G.Nexus.register("keystroke", {}, "keystroke", "", "Show your pressed keys on screen", function()
+    if _G.Nexus.KeystrokeGui then
+        notify("Keystroke", "Already enabled.")
+        return
+    end
     buildKeystroke()
-    notify("Keystroke", "Enabled.")
-end)
 
-_G.Nexus.register("unkeystroke", {}, "unkeystroke", "", "Hide keystrokes", function()
-    if keystrokeGui then keystrokeGui:Destroy() keystrokeGui = nil end
-    keyLabels = {}
-    notify("Keystroke", "Disabled.")
-end)
-
-RunService.RenderStepped:Connect(function()
-    if not keystrokeGui then return end
     local map = {
         W = Enum.KeyCode.W,
         A = Enum.KeyCode.A,
@@ -7601,28 +7895,39 @@ RunService.RenderStepped:Connect(function()
         D = Enum.KeyCode.D,
         Space = Enum.KeyCode.Space,
     }
-    for k, code in pairs(map) do
-        local box = keyLabels[k]
-        if box then
-            local down = UserInputService:IsKeyDown(code)
-            box.BackgroundColor3 = down and Color3.fromRGB(61, 214, 140) or Color3.fromRGB(24, 24, 29)
-            box.TextColor3 = down and Color3.fromRGB(17, 17, 20) or Color3.fromRGB(122, 122, 140)
+    _G.Nexus.KeystrokeConn = RunService.RenderStepped:Connect(function()
+        for k, code in pairs(map) do
+            local box = _G.Nexus.KeyLabels[k]
+            if box then
+                local down = UserInputService:IsKeyDown(code)
+                box.BackgroundColor3 = down and Color3.fromRGB(61, 214, 140) or Color3.fromRGB(24, 24, 29)
+                box.TextColor3 = down and Color3.fromRGB(17, 17, 20) or Color3.fromRGB(122, 122, 140)
+            end
         end
-    end
+    end)
+    notify("Keystroke", "Enabled.")
+end)
+
+_G.Nexus.register("unkeystroke", {}, "unkeystroke", "", "Hide keystrokes", function()
+    if _G.Nexus.KeystrokeGui then _G.Nexus.KeystrokeGui:Destroy() _G.Nexus.KeystrokeGui = nil end
+    if _G.Nexus.KeystrokeConn then _G.Nexus.KeystrokeConn:Disconnect() _G.Nexus.KeystrokeConn = nil end
+    _G.Nexus.KeyLabels = {}
+    notify("Keystroke", "Disabled.")
 end)
 
 -- ============================================================
 -- NOTEPAD
 -- ============================================================
-local notepadGui
+_G.Nexus.NotepadGui = _G.Nexus.NotepadGui or nil
 
 _G.Nexus.register("notepad", {"npad"}, "notepad", "", "Open a simple notepad UI", function()
-    if notepadGui then notepadGui:Destroy() end
+    if _G.Nexus.NotepadGui then _G.Nexus.NotepadGui:Destroy() end
 
-    notepadGui = Instance.new("ScreenGui")
-    notepadGui.Name = "NexusNotepad"
-    notepadGui.ResetOnSpawn = false
-    notepadGui.Parent = CoreGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusNotepad"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    _G.Nexus.NotepadGui = gui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 400, 0, 300)
@@ -7631,7 +7936,7 @@ _G.Nexus.register("notepad", {"npad"}, "notepad", "", "Open a simple notepad UI"
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
-    frame.Parent = notepadGui
+    frame.Parent = gui
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
@@ -7669,8 +7974,7 @@ _G.Nexus.register("notepad", {"npad"}, "notepad", "", "Open a simple notepad UI"
     cc.Parent = close
 
     close.MouseButton1Click:Connect(function()
-        notepadGui:Destroy()
-        notepadGui = nil
+        if _G.Nexus.NotepadGui then _G.Nexus.NotepadGui:Destroy() _G.Nexus.NotepadGui = nil end
     end)
 
     local box = Instance.new("TextBox")
@@ -7706,7 +8010,7 @@ _G.Nexus.register("notepad", {"npad"}, "notepad", "", "Open a simple notepad UI"
 end)
 
 _G.Nexus.register("unnotepad", {}, "unnotepad", "", "Close the notepad", function()
-    if notepadGui then notepadGui:Destroy() notepadGui = nil end
+    if _G.Nexus.NotepadGui then _G.Nexus.NotepadGui:Destroy() _G.Nexus.NotepadGui = nil end
     notify("Notepad", "Closed.")
 end)
 
@@ -7745,25 +8049,29 @@ _G.Nexus.register("unautoclicker", {"unac"}, "unautoclicker", "", "Stop autoclic
 end)
 
 -- ============================================================
--- MINIMAP (small view of nearby players)
+-- MINIMAP (proper cleanup, no blip leaks)
 -- ============================================================
-local minimapGui
-local minimapBlips = {}
+_G.Nexus.MinimapGui = _G.Nexus.MinimapGui or nil
+_G.Nexus.MinimapConn = _G.Nexus.MinimapConn or nil
+_G.Nexus.MinimapBlips = _G.Nexus.MinimapBlips or {}
 
 _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby players", function()
-    if minimapGui then minimapGui:Destroy() end
+    if _G.Nexus.MinimapGui then _G.Nexus.MinimapGui:Destroy() end
+    if _G.Nexus.MinimapConn then _G.Nexus.MinimapConn:Disconnect() end
+    _G.Nexus.MinimapBlips = {}
 
-    minimapGui = Instance.new("ScreenGui")
-    minimapGui.Name = "NexusMinimap"
-    minimapGui.ResetOnSpawn = false
-    minimapGui.Parent = CoreGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusMinimap"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    _G.Nexus.MinimapGui = gui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 200, 0, 200)
     frame.Position = UDim2.new(0, 20, 0, 200)
     frame.BackgroundColor3 = Color3.fromRGB(17, 17, 20)
     frame.BorderSizePixel = 0
-    frame.Parent = minimapGui
+    frame.Parent = gui
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
@@ -7785,17 +8093,17 @@ _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby 
     cc.CornerRadius = UDim.new(1, 0)
     cc.Parent = center
 
-    local range = 100 -- studs from center to edge
+    local range = 100
 
-    RunService.Heartbeat:Connect(function()
-        if not minimapGui or not minimapGui.Parent then return end
+    _G.Nexus.MinimapConn = RunService.Heartbeat:Connect(function()
+        if not gui or not gui.Parent then return end
         local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if not myHRP then return end
 
-        for plr, blip in pairs(minimapBlips) do
+        for plr, blip in pairs(_G.Nexus.MinimapBlips) do
             if not plr.Parent or not plr.Character then
                 blip:Destroy()
-                minimapBlips[plr] = nil
+                _G.Nexus.MinimapBlips[plr] = nil
             end
         end
 
@@ -7803,7 +8111,7 @@ _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby 
             if plr ~= LocalPlayer and plr.Character then
                 local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    if not minimapBlips[plr] then
+                    if not _G.Nexus.MinimapBlips[plr] then
                         local blip = Instance.new("Frame")
                         blip.Size = UDim2.new(0, 8, 0, 8)
                         blip.BackgroundColor3 = Color3.fromRGB(240, 79, 88)
@@ -7814,7 +8122,7 @@ _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby 
                         bc.CornerRadius = UDim.new(1, 0)
                         bc.Parent = blip
 
-                        minimapBlips[plr] = blip
+                        _G.Nexus.MinimapBlips[plr] = blip
                     end
 
                     local rel = hrp.Position - myHRP.Position
@@ -7822,7 +8130,7 @@ _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby 
                     local z = math.clamp(rel.Z / range, -1, 1)
                     local px = (x + 1) / 2
                     local pz = (z + 1) / 2
-                    minimapBlips[plr].Position = UDim2.new(px, -4, pz, -4)
+                    _G.Nexus.MinimapBlips[plr].Position = UDim2.new(px, -4, pz, -4)
                 end
             end
         end
@@ -7831,36 +8139,81 @@ _G.Nexus.register("minimap", {}, "minimap", "", "Open a basic minimap of nearby 
 end)
 
 _G.Nexus.register("unminimap", {}, "unminimap", "", "Close the minimap", function()
-    if minimapGui then minimapGui:Destroy() minimapGui = nil end
-    for plr, b in pairs(minimapBlips) do b:Destroy() end
-    minimapBlips = {}
+    if _G.Nexus.MinimapGui then _G.Nexus.MinimapGui:Destroy() _G.Nexus.MinimapGui = nil end
+    if _G.Nexus.MinimapConn then _G.Nexus.MinimapConn:Disconnect() _G.Nexus.MinimapConn = nil end
+    for plr, b in pairs(_G.Nexus.MinimapBlips) do
+        pcall(function() b:Destroy() end)
+    end
+    _G.Nexus.MinimapBlips = {}
     notify("Minimap", "Closed.")
 end)
 
 -- ============================================================
--- ANIMATION PLAYER (plays a list of game animations)
+-- ANIMATION PLAYER (actually plays animations now)
 -- ============================================================
-_G.Nexus.register("animationplayer", {"animplayer"}, "animationplayer", "", "Print all animations found in the game", function()
-    local anims = {}
-    for _, obj in ipairs(game:GetDescendants()) do
-        if obj:IsA("Animation") then
-            table.insert(anims, obj.AnimationId)
+local currentAnimTrack = nil
+
+_G.Nexus.register("animationplayer", {"animplayer", "playanim"}, "animationplayer <id>", "<id>", "Play an animation by asset ID on your character", function(target, args)
+    local id = tonumber(target) or tonumber(args[1])
+    if not id then
+        -- No id, so print the list of animations found
+        local anims = {}
+        for _, obj in ipairs(game:GetDescendants()) do
+            if obj:IsA("Animation") then
+                table.insert(anims, obj.AnimationId)
+            end
         end
+        notify("AnimationPlayer", "Found " .. #anims .. " animations. Use animationplayer <id> to play one.")
+        for _, a in ipairs(anims) do print("[Nexus AnimPlayer] " .. a) end
+        return
     end
-    notify("AnimationPlayer", "Found " .. #anims .. " animations.")
-    for _, id in ipairs(anims) do print("[Nexus AnimPlayer] " .. id) end
+
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    local animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then return end
+
+    if currentAnimTrack then
+        pcall(function() currentAnimTrack:Stop() end)
+        currentAnimTrack = nil
+    end
+
+    local anim = Instance.new("Animation")
+    anim.AnimationId = "rbxassetid://" .. id
+    local ok, track = pcall(function() return animator:LoadAnimation(anim) end)
+    if ok and track then
+        track:Play()
+        currentAnimTrack = track
+        notify("AnimationPlayer", "Playing " .. id)
+    else
+        notify("AnimationPlayer", "Failed to load animation " .. id)
+    end
 end)
 
-print("[Nexus] Batch 12 loaded. Misc II ready.")
+_G.Nexus.register("stopanimations", {"stopanims"}, "stopanimations", "", "Stop the currently playing animation", function()
+    if currentAnimTrack then
+        pcall(function() currentAnimTrack:Stop() end)
+        currentAnimTrack = nil
+        notify("AnimationPlayer", "Stopped.")
+    else
+        notify("AnimationPlayer", "No animation playing.")
+    end
+end)
+
+print("[Nexus] Batch 12 loaded. Misc II (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 13: SERVER II
+-- NEXUS - BATCH 13: SERVER II (FIXED, FINAL)
 -- joinjobid, joinserver, joingame, copytptogame,
--- copytptoserver, reserve, teleportgui
+-- copytptoserver, reserve, teleportgui, unteleportgui,
+-- serverlist
 -- ============================================================
 
 local Players = game:GetService("Players")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
 local function notify(title, text)
@@ -7868,7 +8221,7 @@ local function notify(title, text)
 end
 
 -- ============================================================
--- JOINJOBID (join a specific job id in the current place)
+-- JOINJOBID
 -- ============================================================
 _G.Nexus.register("joinjobid", {"jjid"}, "joinjobid <jobid>", "<jobid>", "Join a specific server by JobId", function(target)
     if not target then notify("JoinJobId", "Provide a JobId.") return end
@@ -7883,7 +8236,7 @@ _G.Nexus.register("joinjobid", {"jjid"}, "joinjobid <jobid>", "<jobid>", "Join a
 end)
 
 -- ============================================================
--- JOINSERVER (same as joinjobid, just an alias)
+-- JOINSERVER
 -- ============================================================
 _G.Nexus.register("joinserver", {"joinjid"}, "joinserver <jobid>", "<jobid>", "Join a server by JobId", function(target)
     if not target then notify("JoinServer", "Provide a JobId.") return end
@@ -7894,7 +8247,7 @@ _G.Nexus.register("joinserver", {"joinjid"}, "joinserver <jobid>", "<jobid>", "J
 end)
 
 -- ============================================================
--- JOINGAME (join a game by PlaceId)
+-- JOINGAME
 -- ============================================================
 _G.Nexus.register("joingame", {"joinplace"}, "joingame <placeId>", "<placeId>", "Join a game by PlaceId", function(target)
     local id = tonumber(target)
@@ -7910,52 +8263,61 @@ _G.Nexus.register("joingame", {"joinplace"}, "joingame <placeId>", "<placeId>", 
 end)
 
 -- ============================================================
--- COPYTPTOGAME (copy a script that teleports to the current place)
+-- COPYTPTOGAME
 -- ============================================================
 _G.Nexus.register("copytptogame", {"cttg"}, "copytptogame", "", "Copy a script that teleports you to this game", function()
-    local script = string.format([[loadstring(game:HttpGet("https://raw.githubusercontent.com/YOURUSERNAME/nexus/main/nexus.lua"))()
-game:GetService("TeleportService"):Teleport(%d)]], game.PlaceId)
-    pcall(function() if setclipboard then setclipboard(script) end end)
+    local str = string.format([[-- Nexus teleport script for game %d
+local TeleportService = game:GetService("TeleportService")
+TeleportService:Teleport(%d, game.Players.LocalPlayer)]], game.PlaceId, game.PlaceId)
+    pcall(function() if setclipboard then setclipboard(str) end end)
     notify("CopyTpToGame", "Script copied (PlaceId " .. game.PlaceId .. ")")
 end)
 
 -- ============================================================
--- COPYTPTOSERVER (copy a script that teleports you to this server)
+-- COPYTPTOSERVER
 -- ============================================================
 _G.Nexus.register("copytptoserver", {"ctts"}, "copytptoserver", "", "Copy a script that teleports you to this exact server", function()
-    local script = string.format([[loadstring(game:HttpGet("https://raw.githubusercontent.com/YOURUSERNAME/nexus/main/nexus.lua"))()
-game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s")]], game.PlaceId, game.JobId)
-    pcall(function() if setclipboard then setclipboard(script) end end)
+    local str = string.format([[-- Nexus teleport script for server %s
+local TeleportService = game:GetService("TeleportService")
+TeleportService:TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)]], game.JobId, game.PlaceId, game.JobId)
+    pcall(function() if setclipboard then setclipboard(str) end end)
     notify("CopyTpToServer", "Script copied.")
 end)
 
 -- ============================================================
--- RESERVE (reserve a server and teleport)
+-- RESERVE (reserves and joins the private server)
 -- ============================================================
 _G.Nexus.register("reserve", {"reserveserver", "rs"}, "reserve", "", "Reserve a private server and teleport into it", function()
-    local ok = pcall(function()
-        TeleportService:ReserveServer(game.PlaceId)
+    local ok, code, err = pcall(function()
+        return TeleportService:ReserveServer(game.PlaceId)
     end)
-    if ok then
-        notify("Reserve", "Server reserved.")
+    if ok and code then
+        notify("Reserve", "Reserved. Teleporting...")
+        task.wait(1)
+        local ok2, err2 = pcall(function()
+            TeleportService:TeleportToPrivateServer(game.PlaceId, code, {LocalPlayer})
+        end)
+        if not ok2 then
+            notify("Reserve", "Failed to join: " .. tostring(err2))
+        end
     else
-        notify("Reserve", "Failed (needs more context to work properly).")
+        notify("Reserve", "Failed: " .. tostring(code or err))
     end
 end)
 
 -- ============================================================
--- TELEPORT GUI (select a place to teleport to)
+-- TELEPORT GUI
 -- ============================================================
-local teleportGui
+_G.Nexus.TeleportGui = _G.Nexus.TeleportGui or nil
 
-_G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to teleport to any PlaceId", function()
-    if teleportGui then teleportGui:Destroy() end
-    local CoreGui = game:GetService("CoreGui")
+local function buildTeleportGui()
+    if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() end
 
-    teleportGui = Instance.new("ScreenGui")
-    teleportGui.Name = "NexusTeleportGui"
-    teleportGui.ResetOnSpawn = false
-    teleportGui.Parent = CoreGui
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "NexusTeleportGui"
+    gui.ResetOnSpawn = false
+    gui.Parent = CoreGui
+    _G.Nexus.TeleportGui = gui
 
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(0, 400, 0, 180)
@@ -7964,7 +8326,7 @@ _G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to tele
     frame.BorderSizePixel = 0
     frame.Active = true
     frame.Draggable = true
-    frame.Parent = teleportGui
+    frame.Parent = gui
 
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 12)
@@ -8002,8 +8364,7 @@ _G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to tele
     cc.Parent = close
 
     close.MouseButton1Click:Connect(function()
-        teleportGui:Destroy()
-        teleportGui = nil
+        if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() _G.Nexus.TeleportGui = nil end
     end)
 
     local input = Instance.new("TextBox")
@@ -8044,17 +8405,20 @@ _G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to tele
         pcall(function() TeleportService:Teleport(id, LocalPlayer) end)
         notify("TeleportGui", "Teleporting to " .. id)
     end)
+end
 
+_G.Nexus.register("teleportgui", {"tpui"}, "teleportgui", "", "Open a UI to teleport to any PlaceId", function()
+    buildTeleportGui()
     notify("TeleportGui", "Opened.")
 end)
 
 _G.Nexus.register("unteleportgui", {"untpui"}, "unteleportgui", "", "Close the teleport GUI", function()
-    if teleportGui then teleportGui:Destroy() teleportGui = nil end
+    if _G.Nexus.TeleportGui then _G.Nexus.TeleportGui:Destroy() _G.Nexus.TeleportGui = nil end
     notify("TeleportGui", "Closed.")
 end)
 
 -- ============================================================
--- SERVERLIST (quick browser of active servers)
+-- SERVERLIST
 -- ============================================================
 _G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active servers for this place in the console", function()
     local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
@@ -8063,8 +8427,13 @@ _G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active server
         notify("ServerList", "HTTP request failed.")
         return
     end
-    local data = HttpService:JSONDecode(res)
-    local list = data.data or {}
+    local decoded = nil
+    pcall(function() decoded = HttpService:JSONDecode(res) end)
+    if not decoded then
+        notify("ServerList", "Bad JSON response.")
+        return
+    end
+    local list = decoded.data or {}
     print("[Nexus ServerList] " .. #list .. " servers found:")
     for _, s in ipairs(list) do
         print("  JobId: " .. s.id .. " | Playing: " .. s.playing .. "/" .. s.maxPlayers)
@@ -8072,15 +8441,17 @@ _G.Nexus.register("serverlist", {"slist"}, "serverlist", "", "List active server
     notify("ServerList", #list .. " servers printed to console.")
 end)
 
-print("[Nexus] Batch 13 loaded. Server II ready.")
+print("[Nexus] Batch 13 loaded. Server II (fixed, final) ready.")
 -- ============================================================
--- NEXUS - BATCH 14: FUN / MISC III
--- hamster, unhamster, cig, cigar, pipe, oofspam, unoofspam,
--- firework, unfirework, seizure, unseizure, confetti
+-- NEXUS - BATCH 14: FUN / MISC III (FIXED)
+-- hamster, unhamster, cig, uncig, cigar, uncigar, pipe, unpipe,
+-- oofspam, unoofspam, firework, unfirework, confetti,
+-- unconfetti, seizure, unseizure
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 
@@ -8095,190 +8466,214 @@ local function getHRP()
 end
 
 -- ============================================================
--- HAMSTER (hamster ball around your character)
+-- HAMSTER
 -- ============================================================
-local hamsterBall
+_G.Nexus.HamsterBall = _G.Nexus.HamsterBall or nil
 
 _G.Nexus.register("hamster", {"hamsterball"}, "hamster", "", "Roll yourself in a hamster ball", function()
-    if hamsterBall then return end
+    if _G.Nexus.HamsterBall then
+        notify("Hamster", "Already enabled.")
+        return
+    end
     local hrp = getHRP()
     if not hrp then return end
 
-    hamsterBall = Instance.new("Part")
-    hamsterBall.Name = "NexusHamsterBall"
-    hamsterBall.Shape = Enum.PartType.Ball
-    hamsterBall.Size = Vector3.new(10, 10, 10)
-    hamsterBall.Anchored = false
-    hamsterBall.CanCollide = false
-    hamsterBall.Massless = false
-    hamsterBall.Material = Enum.Material.ForceField
-    hamsterBall.Color = Color3.fromRGB(61, 214, 140)
-    hamsterBall.Transparency = 0.5
-    hamsterBall.CFrame = hrp.CFrame
-    hamsterBall.Parent = Workspace
+    local ball = Instance.new("Part")
+    ball.Name = "NexusHamsterBall"
+    ball.Shape = Enum.PartType.Ball
+    ball.Size = Vector3.new(10, 10, 10)
+    ball.Anchored = false
+    ball.CanCollide = false
+    ball.Massless = false
+    ball.Material = Enum.Material.ForceField
+    ball.Color = Color3.fromRGB(61, 214, 140)
+    ball.Transparency = 0.5
+    ball.CFrame = hrp.CFrame
+    ball.Parent = Workspace
 
     local weld = Instance.new("WeldConstraint")
     weld.Part0 = hrp
-    weld.Part1 = hamsterBall
-    weld.Parent = hamsterBall
+    weld.Part1 = ball
+    weld.Parent = ball
 
+    _G.Nexus.HamsterBall = ball
     notify("Hamster", "Enabled.")
 end)
 
 _G.Nexus.register("unhamster", {"unhamsterball"}, "unhamster", "", "Stop being a hamster", function()
-    if hamsterBall then hamsterBall:Destroy() hamsterBall = nil end
+    if _G.Nexus.HamsterBall then
+        pcall(function() _G.Nexus.HamsterBall:Destroy() end)
+        _G.Nexus.HamsterBall = nil
+    end
     notify("Hamster", "Disabled.")
 end)
 
 -- ============================================================
--- CIG (small cig on your head)
+-- CIG / CIGAR / PIPE (single cleanup function each)
 -- ============================================================
-local cigPart
+_G.Nexus.CigPart = _G.Nexus.CigPart or nil
+_G.Nexus.CigarPart = _G.Nexus.CigarPart or nil
+_G.Nexus.PipeParts = _G.Nexus.PipeParts or {}
+
+local function clearCig()
+    if _G.Nexus.CigPart then
+        pcall(function() _G.Nexus.CigPart:Destroy() end)
+        _G.Nexus.CigPart = nil
+    end
+end
+
+local function clearCigar()
+    if _G.Nexus.CigarPart then
+        pcall(function() _G.Nexus.CigarPart:Destroy() end)
+        _G.Nexus.CigarPart = nil
+    end
+end
+
+local function clearPipe()
+    for _, p in ipairs(_G.Nexus.PipeParts) do
+        pcall(function() p:Destroy() end)
+    end
+    _G.Nexus.PipeParts = {}
+end
 
 _G.Nexus.register("cig", {"cigarette"}, "cig", "", "Give yourself a cigarette", function()
-    if cigPart then cigPart:Destroy() cigPart = nil end
+    clearCig()
     local char = getChar()
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head then return end
 
-    cigPart = Instance.new("Part")
-    cigPart.Name = "NexusCig"
-    cigPart.Size = Vector3.new(0.2, 0.2, 1.2)
-    cigPart.Color = Color3.fromRGB(240, 240, 240)
-    cigPart.Material = Enum.Material.SmoothPlastic
-    cigPart.CanCollide = false
-    cigPart.Massless = true
-    cigPart.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.6)
-    cigPart.Parent = char
+    local part = Instance.new("Part")
+    part.Name = "NexusCig"
+    part.Size = Vector3.new(0.2, 0.2, 1.2)
+    part.Color = Color3.fromRGB(240, 240, 240)
+    part.Material = Enum.Material.SmoothPlastic
+    part.CanCollide = false
+    part.Massless = true
+    part.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.6)
+    part.Parent = char
 
     local weld = Instance.new("WeldConstraint")
     weld.Part0 = head
-    weld.Part1 = cigPart
-    weld.Parent = cigPart
+    weld.Part1 = part
+    weld.Parent = part
 
     local tip = Instance.new("PointLight")
     tip.Brightness = 2
     tip.Range = 5
     tip.Color = Color3.fromRGB(255, 80, 80)
-    tip.Parent = cigPart
+    tip.Parent = part
 
+    _G.Nexus.CigPart = part
     notify("Cig", "Enjoy.")
 end)
 
 _G.Nexus.register("uncig", {}, "uncig", "", "Remove the cig", function()
-    if cigPart then cigPart:Destroy() cigPart = nil end
+    clearCig()
     notify("Cig", "Removed.")
 end)
 
--- ============================================================
--- CIGAR (bigger version)
--- ============================================================
-local cigarPart
-
 _G.Nexus.register("cigar", {}, "cigar", "", "Give yourself a fat cigar", function()
-    if cigarPart then cigarPart:Destroy() cigarPart = nil end
+    clearCigar()
     local char = getChar()
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head then return end
 
-    cigarPart = Instance.new("Part")
-    cigarPart.Name = "NexusCigar"
-    cigarPart.Size = Vector3.new(0.4, 0.4, 1.6)
-    cigarPart.Color = Color3.fromRGB(80, 50, 30)
-    cigarPart.Material = Enum.Material.SmoothPlastic
-    cigarPart.CanCollide = false
-    cigarPart.Massless = true
-    cigarPart.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.8)
-    cigarPart.Parent = char
+    local part = Instance.new("Part")
+    part.Name = "NexusCigar"
+    part.Size = Vector3.new(0.4, 0.4, 1.6)
+    part.Color = Color3.fromRGB(80, 50, 30)
+    part.Material = Enum.Material.SmoothPlastic
+    part.CanCollide = false
+    part.Massless = true
+    part.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.8)
+    part.Parent = char
 
     local weld = Instance.new("WeldConstraint")
     weld.Part0 = head
-    weld.Part1 = cigarPart
-    weld.Parent = cigarPart
+    weld.Part1 = part
+    weld.Parent = part
 
+    _G.Nexus.CigarPart = part
     notify("Cigar", "Boss mode.")
 end)
 
 _G.Nexus.register("uncigar", {}, "uncigar", "", "Remove the cigar", function()
-    if cigarPart then cigarPart:Destroy() cigarPart = nil end
+    clearCigar()
     notify("Cigar", "Removed.")
 end)
 
--- ============================================================
--- PIPE
--- ============================================================
-local pipePart
-
 _G.Nexus.register("pipe", {}, "pipe", "", "Give yourself a smoking pipe", function()
-    if pipePart then pipePart:Destroy() pipePart = nil end
+    clearPipe()
     local char = getChar()
     if not char then return end
     local head = char:FindFirstChild("Head")
     if not head then return end
 
-    pipePart = Instance.new("Part")
-    pipePart.Name = "NexusPipe"
-    pipePart.Size = Vector3.new(0.3, 0.3, 1)
-    pipePart.Color = Color3.fromRGB(60, 30, 20)
-    pipePart.Material = Enum.Material.Wood
-    pipePart.CanCollide = false
-    pipePart.Massless = true
-    pipePart.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.8)
-    pipePart.Parent = char
+    local pipe = Instance.new("Part")
+    pipe.Name = "NexusPipe"
+    pipe.Size = Vector3.new(0.3, 0.3, 1)
+    pipe.Color = Color3.fromRGB(60, 30, 20)
+    pipe.Material = Enum.Material.Wood
+    pipe.CanCollide = false
+    pipe.Massless = true
+    pipe.CFrame = head.CFrame * CFrame.new(0.6, -0.4, -0.8)
+    pipe.Parent = char
 
     local bowl = Instance.new("Part")
+    bowl.Name = "NexusPipeBowl"
     bowl.Size = Vector3.new(0.5, 0.5, 0.5)
     bowl.Color = Color3.fromRGB(40, 20, 10)
     bowl.Material = Enum.Material.Wood
     bowl.CanCollide = false
     bowl.Massless = true
-    bowl.CFrame = pipePart.CFrame * CFrame.new(0, 0.3, -0.5)
+    bowl.CFrame = pipe.CFrame * CFrame.new(0, 0.3, -0.5)
     bowl.Parent = char
 
     local weld1 = Instance.new("WeldConstraint")
     weld1.Part0 = head
-    weld1.Part1 = pipePart
-    weld1.Parent = pipePart
+    weld1.Part1 = pipe
+    weld1.Parent = pipe
 
     local weld2 = Instance.new("WeldConstraint")
-    weld2.Part0 = pipePart
+    weld2.Part0 = pipe
     weld2.Part1 = bowl
     weld2.Parent = bowl
 
-    pipePart:SetAttribute("BowlPart", bowl.Name)
-    bowl:SetAttribute("ParentPipe", pipePart.Name)
-
-    pipePart.Name = "NexusPipe"
-
-    local cleanup = function()
-        if pipePart then pipePart:Destroy() pipePart = nil end
-        if bowl and bowl.Parent then bowl:Destroy() end
-    end
-    _G.Nexus._pipeCleanup = cleanup
-
+    _G.Nexus.PipeParts = { pipe, bowl }
     notify("Pipe", "Chill.")
 end)
 
 _G.Nexus.register("unpipe", {}, "unpipe", "", "Remove the pipe", function()
-    if _G.Nexus._pipeCleanup then _G.Nexus._pipeCleanup() end
-    pipePart = nil
+    clearPipe()
     notify("Pipe", "Removed.")
 end)
 
 -- ============================================================
--- OOF SPAM
+-- OOF SPAM (sounds tracked and cleaned on stop)
 -- ============================================================
 local oofSpamActive = false
+local oofSpamThread = nil
+local oofSounds = {}
+
+local function clearOofSounds()
+    for _, s in ipairs(oofSounds) do
+        pcall(function() s:Destroy() end)
+    end
+    oofSounds = {}
+end
 
 _G.Nexus.register("oofspam", {}, "oofspam", "", "Spam the oof sound", function()
-    if oofSpamActive then return end
+    if oofSpamActive then
+        notify("OofSpam", "Already enabled.")
+        return
+    end
     oofSpamActive = true
-    task.spawn(function()
-        local soundId = "rbxassetid://3439874943"
+    local soundId = "rbxassetid://3439874943"
+
+    oofSpamThread = task.spawn(function()
         while oofSpamActive do
-            local char = getChar()
             local hrp = getHRP()
             if hrp then
                 local s = Instance.new("Sound")
@@ -8286,7 +8681,10 @@ _G.Nexus.register("oofspam", {}, "oofspam", "", "Spam the oof sound", function()
                 s.Volume = 2
                 s.Parent = hrp
                 s:Play()
-                game:GetService("Debris"):AddItem(s, 2)
+                table.insert(oofSounds, s)
+                task.delay(2, function()
+                    pcall(function() s:Destroy() end)
+                end)
             end
             task.wait(0.5)
         end
@@ -8296,13 +8694,18 @@ end)
 
 _G.Nexus.register("unoofspam", {}, "unoofspam", "", "Stop oof spam", function()
     oofSpamActive = false
+    if oofSpamThread then
+        pcall(function() task.cancel(oofSpamThread) end)
+        oofSpamThread = nil
+    end
+    clearOofSounds()
     notify("OofSpam", "Disabled.")
 end)
 
 -- ============================================================
--- FIREWORK (spawn a firework above you)
+-- FIREWORK (tracked parts)
 -- ============================================================
-local fireworkParts = {}
+_G.Nexus.FireworkParts = _G.Nexus.FireworkParts or {}
 
 local function spawnFirework()
     local hrp = getHRP()
@@ -8328,12 +8731,14 @@ local function spawnFirework()
     emitter.Color = ColorSequence.new(part.Color)
     emitter.Parent = att
 
+    table.insert(_G.Nexus.FireworkParts, part)
+
     task.delay(0.3, function()
         emitter.Enabled = false
-        task.delay(2, function() part:Destroy() end)
+        task.delay(2, function()
+            pcall(function() part:Destroy() end)
+        end)
     end)
-
-    table.insert(fireworkParts, part)
 end
 
 _G.Nexus.register("firework", {"fw"}, "firework", "", "Spawn a firework above you", function()
@@ -8342,22 +8747,27 @@ _G.Nexus.register("firework", {"fw"}, "firework", "", "Spawn a firework above yo
 end)
 
 _G.Nexus.register("unfirework", {"unfw"}, "unfirework", "", "Remove all fireworks", function()
-    for _, p in ipairs(fireworkParts) do
-        if p and p.Parent then p:Destroy() end
+    for _, p in ipairs(_G.Nexus.FireworkParts) do
+        pcall(function() p:Destroy() end)
     end
-    fireworkParts = {}
+    _G.Nexus.FireworkParts = {}
     notify("Firework", "Cleared.")
 end)
 
 -- ============================================================
--- CONFETTI (party mode)
+-- CONFETTI (active flag + thread)
 -- ============================================================
 local confettiActive = false
+local confettiThread = nil
 
 _G.Nexus.register("confetti", {"party"}, "confetti", "", "Rain confetti everywhere", function()
-    if confettiActive then return end
+    if confettiActive then
+        notify("Confetti", "Already enabled.")
+        return
+    end
     confettiActive = true
-    task.spawn(function()
+
+    confettiThread = task.spawn(function()
         while confettiActive do
             local hrp = getHRP()
             if hrp then
@@ -8381,17 +8791,30 @@ end)
 
 _G.Nexus.register("unconfetti", {"unparty"}, "unconfetti", "", "Stop confetti", function()
     confettiActive = false
+    if confettiThread then
+        pcall(function() task.cancel(confettiThread) end)
+        confettiThread = nil
+    end
     notify("Confetti", "Stopped.")
 end)
 
 -- ============================================================
--- SEIZURE (flashing colors)
+-- SEIZURE (saves original and restores it)
 -- ============================================================
-local seizureConn
+local seizureConn = nil
+local seizureOriginal = nil
 
 _G.Nexus.register("seizure", {}, "seizure", "", "Make the lighting flash rapidly", function()
-    if seizureConn then return end
-    local Lighting = game:GetService("Lighting")
+    if seizureConn then
+        notify("Seizure", "Already enabled.")
+        return
+    end
+    if not seizureOriginal then
+        seizureOriginal = {
+            Ambient = Lighting.Ambient,
+            OutdoorAmbient = Lighting.OutdoorAmbient,
+        }
+    end
     seizureConn = RunService.Heartbeat:Connect(function()
         Lighting.Ambient = Color3.fromRGB(math.random(0, 255), math.random(0, 255), math.random(0, 255))
         Lighting.OutdoorAmbient = Color3.fromRGB(math.random(0, 255), math.random(0, 255), math.random(0, 255))
@@ -8400,19 +8823,28 @@ _G.Nexus.register("seizure", {}, "seizure", "", "Make the lighting flash rapidly
 end)
 
 _G.Nexus.register("unseizure", {}, "unseizure", "", "Stop the seizure", function()
-    if seizureConn then seizureConn:Disconnect() seizureConn = nil end
-    local Lighting = game:GetService("Lighting")
-    Lighting.Ambient = Color3.fromRGB(70, 70, 70)
-    Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    if seizureConn then
+        seizureConn:Disconnect()
+        seizureConn = nil
+    end
+    if seizureOriginal then
+        Lighting.Ambient = seizureOriginal.Ambient
+        Lighting.OutdoorAmbient = seizureOriginal.OutdoorAmbient
+        seizureOriginal = nil
+    else
+        Lighting.Ambient = Color3.fromRGB(70, 70, 70)
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+    end
     notify("Seizure", "Disabled.")
 end)
 
-print("[Nexus] Batch 14 loaded. Fun / Misc III ready.")
+print("[Nexus] Batch 14 loaded. Fun / Misc III (fixed) ready.")
 -- ============================================================
--- NEXUS - BATCH 15: MISC IV (FINAL)
+-- NEXUS - BATCH 15: MISC IV (FIXED - FINAL)
 -- shaders, unshaders, improvetextures, undotextures,
 -- antiflingparts, unantiflingparts, vehiclenoclip, vehicleclip,
--- vehiclespeed, unvehiclespeed, gravity, ungimmegravity
+-- vehiclespeed, unvehiclespeed, gravity, ungravity,
+-- freezeunanchored, thawunanchored
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -8432,9 +8864,9 @@ local function getHRP()
 end
 
 -- ============================================================
--- SHADERS (a nicer preset of Lighting properties)
+-- SHADERS
 -- ============================================================
-local shaderOriginal
+local shaderOriginal = nil
 
 _G.Nexus.register("shaders", {"rtx", "hd"}, "shaders", "", "Apply a shader preset to Lighting", function()
     if not shaderOriginal then
@@ -8471,33 +8903,61 @@ _G.Nexus.register("unshaders", {"shadersoff"}, "unshaders", "", "Restore the ori
         for k, v in pairs(shaderOriginal) do
             Lighting[k] = v
         end
+        shaderOriginal = nil
     end
     notify("Shaders", "Disabled.")
 end)
 
 -- ============================================================
--- IMPROVE TEXTURES (bump up material quality)
+-- IMPROVE TEXTURES (saves originals so it can be undone)
 -- ============================================================
+_G.Nexus.ImprovedMaterials = _G.Nexus.ImprovedMaterials or nil
+
 _G.Nexus.register("improvetextures", {"hdtextures"}, "improvetextures", "", "Force higher quality textures on every part", function()
+    if _G.Nexus.ImprovedMaterials then
+        notify("ImproveTextures", "Already applied. Use undotextures first.")
+        return
+    end
+    _G.Nexus.ImprovedMaterials = {}
+    local count = 0
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then
+            _G.Nexus.ImprovedMaterials[obj] = obj.Material
             obj.Material = Enum.Material.SmoothPlastic
+            count = count + 1
         end
     end
-    notify("ImproveTextures", "Applied. (Client-side only.)")
+    notify("ImproveTextures", "Applied to " .. count .. " parts.")
 end)
 
-_G.Nexus.register("undotextures", {"restoretextures"}, "undotextures", "", "Restore original textures (rough pass)", function()
-    notify("ImproveTextures", "Restore is best done by re-joining. (Roblox does not expose originals after change.)")
+_G.Nexus.register("undotextures", {"restoretextures"}, "undotextures", "", "Restore original materials", function()
+    if not _G.Nexus.ImprovedMaterials then
+        notify("ImproveTextures", "Nothing to restore.")
+        return
+    end
+    local count = 0
+    for part, mat in pairs(_G.Nexus.ImprovedMaterials) do
+        pcall(function()
+            if part and part.Parent then
+                part.Material = mat
+                count = count + 1
+            end
+        end)
+    end
+    _G.Nexus.ImprovedMaterials = nil
+    notify("ImproveTextures", "Restored " .. count .. " parts.")
 end)
 
 -- ============================================================
--- ANTIFLINGPARTS (ignore unanchored parts with crazy velocity)
+-- ANTIFLINGPARTS
 -- ============================================================
-local antiflingPartsConn
+local antiflingPartsConn = nil
 
 _G.Nexus.register("antiflingparts", {"afparts"}, "antiflingparts", "", "Become uncollidable to fast-moving parts", function()
-    if antiflingPartsConn then return end
+    if antiflingPartsConn then
+        notify("AntiFlingParts", "Already enabled.")
+        return
+    end
     antiflingPartsConn = RunService.Heartbeat:Connect(function()
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("BasePart") and not obj.Anchored then
@@ -8514,17 +8974,23 @@ _G.Nexus.register("antiflingparts", {"afparts"}, "antiflingparts", "", "Become u
 end)
 
 _G.Nexus.register("unantiflingparts", {"unafparts"}, "unantiflingparts", "", "Restore collision to unanchored parts", function()
-    if antiflingPartsConn then antiflingPartsConn:Disconnect() antiflingPartsConn = nil end
+    if antiflingPartsConn then
+        antiflingPartsConn:Disconnect()
+        antiflingPartsConn = nil
+    end
     notify("AntiFlingParts", "Disabled.")
 end)
 
 -- ============================================================
 -- VEHICLE NOCLIP
 -- ============================================================
-local vehicleNoclipConn
+local vehicleNoclipConn = nil
 
 _G.Nexus.register("vehiclenoclip", {"vnoclip"}, "vehiclenoclip", "", "Disable collision on the vehicle you are in", function()
-    if vehicleNoclipConn then return end
+    if vehicleNoclipConn then
+        notify("VehicleNoclip", "Already enabled.")
+        return
+    end
     vehicleNoclipConn = RunService.Heartbeat:Connect(function()
         local char = getChar()
         if not char then return end
@@ -8543,7 +9009,10 @@ _G.Nexus.register("vehiclenoclip", {"vnoclip"}, "vehiclenoclip", "", "Disable co
 end)
 
 _G.Nexus.register("vehicleclip", {"vclip", "unvnoclip"}, "vehicleclip", "", "Re-enable vehicle collision", function()
-    if vehicleNoclipConn then vehicleNoclipConn:Disconnect() vehicleNoclipConn = nil end
+    if vehicleNoclipConn then
+        vehicleNoclipConn:Disconnect()
+        vehicleNoclipConn = nil
+    end
     local char = getChar()
     if char then
         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -8565,7 +9034,7 @@ end)
 -- ============================================================
 -- VEHICLE SPEED
 -- ============================================================
-local vehicleSpeedConn
+local vehicleSpeedConn = nil
 
 _G.Nexus.register("vehiclespeed", {"vspeed"}, "vehiclespeed <number>", "<number>", "Change the torque of the vehicle you are driving", function(target, args)
     local n = tonumber(args[1]) or tonumber(target)
@@ -8592,7 +9061,10 @@ _G.Nexus.register("vehiclespeed", {"vspeed"}, "vehiclespeed <number>", "<number>
 end)
 
 _G.Nexus.register("unvehiclespeed", {"unvspeed"}, "unvehiclespeed", "", "Stop modifying vehicle speed", function()
-    if vehicleSpeedConn then vehicleSpeedConn:Disconnect() vehicleSpeedConn = nil end
+    if vehicleSpeedConn then
+        vehicleSpeedConn:Disconnect()
+        vehicleSpeedConn = nil
+    end
     notify("VehicleSpeed", "Reset.")
 end)
 
@@ -8614,11 +9086,15 @@ _G.Nexus.register("ungravity", {"ungrav"}, "ungravity", "", "Restore the origina
 end)
 
 -- ============================================================
--- FREEZE UNANCHORED (freeze all unanchored parts)
+-- FREEZE UNANCHORED (only freezes parts that were not already anchored)
 -- ============================================================
-local frozenParts = {}
+local frozenParts = nil
 
 _G.Nexus.register("freezeunanchored", {"fua"}, "freezeunanchored", "", "Freeze every unanchored part in the workspace", function()
+    if frozenParts then
+        notify("FreezeUnanchored", "Already frozen. Use thawunanchored first.")
+        return
+    end
     frozenParts = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") and not obj.Anchored then
@@ -8632,11 +9108,21 @@ _G.Nexus.register("freezeunanchored", {"fua"}, "freezeunanchored", "", "Freeze e
 end)
 
 _G.Nexus.register("thawunanchored", {"tua"}, "thawunanchored", "", "Thaw everything freezeunanchored froze", function()
-    for _, obj in ipairs(frozenParts) do
-        if obj and obj.Parent then obj.Anchored = false end
+    if not frozenParts then
+        notify("FreezeUnanchored", "Nothing to thaw.")
+        return
     end
-    frozenParts = {}
-    notify("FreezeUnanchored", "Thawed.")
+    local count = 0
+    for _, obj in ipairs(frozenParts) do
+        pcall(function()
+            if obj and obj.Parent then
+                obj.Anchored = false
+                count = count + 1
+            end
+        end)
+    end
+    frozenParts = nil
+    notify("FreezeUnanchored", "Thawed " .. count .. " parts.")
 end)
 
-print("[Nexus] Batch 15 loaded. Misc IV ready. ALL BATCHES COMPLETE.")
+print("[Nexus] Batch 15 loaded. Misc IV (fixed) ready. ALL BATCHES COMPLETE.")
