@@ -3239,7 +3239,7 @@ _G.Nexus.register("kill", {}, "kill <player>", "<player>", "Set a player's healt
     local hum = plr.Character:FindFirstChildOfClass("Humanoid")
     if hum then hum.Health = 0 end
     notify("Kill", "Killed " .. plr.Name)
-end))
+end)
 
 -- ============================================================
 -- LOOP BRING
